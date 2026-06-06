@@ -54,14 +54,15 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
       return
     }
 
-    this.maxWidth = options.getInt("maxWidth")
-    this.maxHeight = options.getInt("maxHeight")
-    this.quality = (options.getDouble("quality") * 100).toInt().coerceIn(1, 100)
-    this.includeBase64 = options.getBoolean("includeBase64")
-    val selectionLimit = options.getInt("selectionLimit")
     pickerPromise = promise
 
     try {
+      this.maxWidth = options.getInt("maxWidth")
+      this.maxHeight = options.getInt("maxHeight")
+      this.quality = (options.getDouble("quality") * 100).toInt().coerceIn(1, 100)
+      this.includeBase64 = options.getBoolean("includeBase64")
+      val selectionLimit = options.getInt("selectionLimit")
+
       val photoPickerAvailable =
         ActivityResultContracts.PickVisualMedia.isPhotoPickerAvailable(reactContext)
       val intent = if (photoPickerAvailable) {
@@ -114,10 +115,19 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
       return
     }
 
+    // Capture options on the main thread before launching the IO coroutine, so a
+    // subsequent launchImageLibrary() cannot mutate them mid-batch.
+    val reqMaxWidth = maxWidth
+    val reqMaxHeight = maxHeight
+    val reqQuality = quality
+    val reqIncludeBase64 = includeBase64
+
     moduleScope.launch {
       try {
         val assets: WritableArray = Arguments.createArray()
-        uris.forEach { uri -> assets.pushMap(processImage(uri)) }
+        uris.forEach { uri ->
+          assets.pushMap(processImage(uri, reqMaxWidth, reqMaxHeight, reqQuality, reqIncludeBase64))
+        }
         val response = Arguments.createMap().apply {
           putBoolean("didCancel", false)
           putArray("assets", assets)
@@ -157,7 +167,18 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
       putString("errorMessage", message)
     }
 
-  private fun processImage(uri: Uri): WritableMap {
+  /**
+   * Decodes, rotates, scales and JPEG-compresses [uri] into a temp file in cacheDir.
+   * The returned file lives in the app cache; the caller owns its lifecycle (the OS
+   * reclaims cacheDir under storage pressure).
+   */
+  private fun processImage(
+    uri: Uri,
+    maxWidth: Int,
+    maxHeight: Int,
+    quality: Int,
+    includeBase64: Boolean,
+  ): WritableMap {
     val resolver = reactContext.contentResolver
     val reqW = if (maxWidth > 0) maxWidth else Int.MAX_VALUE
     val reqH = if (maxHeight > 0) maxHeight else Int.MAX_VALUE
@@ -236,6 +257,7 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
       ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
       ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
       ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+      // TODO(phase-2): handle FLIP_HORIZONTAL/VERTICAL/TRANSPOSE/TRANSVERSE (mirrored shots).
       else -> return bitmap
     }
 
