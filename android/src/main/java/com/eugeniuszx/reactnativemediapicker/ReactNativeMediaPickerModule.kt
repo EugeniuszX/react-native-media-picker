@@ -36,6 +36,7 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
   @Volatile private var maxHeight: Int = 0
   @Volatile private var quality: Int = 100
   @Volatile private var includeBase64: Boolean = false
+  @Volatile private var selectionLimit: Int = 1
 
   init {
     reactContext.addActivityEventListener(this)
@@ -59,9 +60,9 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
     try {
       this.maxWidth = options.getInt("maxWidth")
       this.maxHeight = options.getInt("maxHeight")
-      this.quality = (options.getDouble("quality") * 100).toInt().coerceIn(1, 100)
+      this.quality = (options.getDouble("quality") * 100).toInt().coerceIn(0, 100)
       this.includeBase64 = options.getBoolean("includeBase64")
-      val selectionLimit = options.getInt("selectionLimit")
+      this.selectionLimit = options.getInt("selectionLimit")
 
       val photoPickerAvailable =
         ActivityResultContracts.PickVisualMedia.isPhotoPickerAvailable(reactContext)
@@ -109,7 +110,9 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
       return
     }
 
-    val uris = collectUris(data)
+    val reqSelectionLimit = selectionLimit
+    val collected = collectUris(data)
+    val uris = if (reqSelectionLimit in 2..Int.MAX_VALUE) collected.take(reqSelectionLimit) else collected
     if (uris.isEmpty()) {
       promise.resolve(cancelResponse())
       return

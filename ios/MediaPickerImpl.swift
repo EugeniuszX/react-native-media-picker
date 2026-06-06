@@ -107,8 +107,7 @@ import UIKit
       return nil
     }
 
-    let pixelWidth = resized.cgImage?.width ?? Int(resized.size.width * resized.scale)
-    let pixelHeight = resized.cgImage?.height ?? Int(resized.size.height * resized.scale)
+    let (pixelWidth, pixelHeight) = pixelSize(of: resized)
 
     var asset: [String: Any] = [
       "uri": fileURL.absoluteString,
@@ -122,6 +121,19 @@ import UIKit
       asset["base64"] = data.base64EncodedString()
     }
     return asset
+  }
+
+  private func pixelSize(of image: UIImage) -> (width: Int, height: Int) {
+    guard let cg = image.cgImage else {
+      return (Int(image.size.width * image.scale), Int(image.size.height * image.scale))
+    }
+    switch image.imageOrientation {
+    case .left, .leftMirrored, .right, .rightMirrored:
+      // 90°/270°: the encoded (orientation-applied) image swaps the raw buffer's axes.
+      return (cg.height, cg.width)
+    default:
+      return (cg.width, cg.height)
+    }
   }
 
   private func resizeToFit(_ image: UIImage) -> UIImage {

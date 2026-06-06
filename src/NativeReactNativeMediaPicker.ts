@@ -8,6 +8,7 @@ export type Asset = {
   fileSize?: number;
   width?: number;
   height?: number;
+  // Forward-compat for video (Phase 3); never set for photos.
   duration?: number;
   base64?: string;
 };

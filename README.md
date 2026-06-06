@@ -34,7 +34,7 @@ if (!result.didCancel && result.assets) {
 
 | Option | Type | Default | Notes |
 |---|---|---|---|
-| `mediaType` | `'photo' \| 'video' \| 'mixed'` | `'photo'` | Phase 1 implements `'photo'` |
+| `mediaType` | `'photo' \| 'video' \| 'mixed'` | `'photo'` | Phase 1 implements `'photo'` only; `'video'`/`'mixed'` currently behave as `'photo'` |
 | `selectionLimit` | `number` | `1` | `0` = unlimited |
 | `maxWidth` | `number` | `0` | `0` = no resize |
 | `maxHeight` | `number` | `0` | `0` = no resize |
@@ -46,6 +46,16 @@ if (!result.didCancel && result.assets) {
 Each picked item resolves to: `uri` (a `file://` path to a temp JPEG), `type`
 (`"image/jpeg"`), `fileName`, `fileSize`, `width`, `height`, and `base64` (only when
 `includeBase64` is true).
+
+## Response & error handling
+
+`launchImageLibrary` **never rejects** — it always resolves a `PickerResponse`:
+
+- **Success:** `{ didCancel: false, assets: Asset[] }`
+- **Cancelled:** `{ didCancel: true }`
+- **Error:** `{ didCancel: false, errorCode: 'others', errorMessage: string }`
+
+Check `didCancel`, then `errorCode`, then read `assets`.
 
 ## Permissions
 
