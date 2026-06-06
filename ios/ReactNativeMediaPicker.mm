@@ -1,10 +1,49 @@
 #import "ReactNativeMediaPicker.h"
 
-@implementation ReactNativeMediaPicker
-- (NSNumber *)multiply:(double)a b:(double)b {
-    NSNumber *result = @(a * b);
+#if __has_include("ReactNativeMediaPicker-Swift.h")
+#import "ReactNativeMediaPicker-Swift.h"
+#else
+#import <ReactNativeMediaPicker/ReactNativeMediaPicker-Swift.h>
+#endif
 
-    return result;
+@implementation ReactNativeMediaPicker {
+    MediaPickerImpl *_impl;
+}
+
+- (instancetype)init
+{
+    if (self = [super init]) {
+        _impl = [MediaPickerImpl new];
+    }
+    return self;
+}
+
+- (void)launchImageLibrary:(JS::NativeReactNativeMediaPicker::NativeLibraryOptions &)options
+                   resolve:(RCTPromiseResolveBlock)resolve
+                    reject:(RCTPromiseRejectBlock)reject
+{
+    NSInteger selectionLimit = (NSInteger)options.selectionLimit();
+    double maxWidth = options.maxWidth();
+    double maxHeight = options.maxHeight();
+    double quality = options.quality();
+    BOOL includeBase64 = options.includeBase64();
+
+    [_impl launchImageLibrary:selectionLimit
+                     maxWidth:maxWidth
+                    maxHeight:maxHeight
+                      quality:quality
+                includeBase64:includeBase64
+                   completion:^(NSArray<NSDictionary *> *assets,
+                                BOOL didCancel,
+                                NSString *errorCode,
+                                NSString *errorMessage) {
+        NSMutableDictionary *response = [NSMutableDictionary dictionary];
+        response[@"didCancel"] = @(didCancel);
+        if (assets != nil) { response[@"assets"] = assets; }
+        if (errorCode != nil) { response[@"errorCode"] = errorCode; }
+        if (errorMessage != nil) { response[@"errorMessage"] = errorMessage; }
+        resolve(response);
+    }];
 }
 
 - (std::shared_ptr<facebook::react::TurboModule>)getTurboModule:
