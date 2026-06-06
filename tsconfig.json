@@ -1,4 +1,10 @@
 {
+  "exclude": [
+    "example",
+    "lib",
+    "src/__tests__",
+    "src/__mocks__"
+  ],
   "compilerOptions": {
     "rootDir": ".",
     "paths": {

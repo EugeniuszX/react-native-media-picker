@@ -131,6 +131,10 @@
   },
   "jest": {
     "preset": "@react-native/jest-preset",
+    "testEnvironment": "node",
+    "moduleNameMapper": {
+      "^./NativeReactNativeMediaPicker$": "<rootDir>/src/__mocks__/NativeReactNativeMediaPicker.ts"
+    },
     "modulePathIgnorePatterns": [
       "<rootDir>/example/node_modules",
       "<rootDir>/lib/"
