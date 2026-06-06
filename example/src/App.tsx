@@ -1,38 +1,78 @@
 import { useState } from 'react';
-import { Button, Text, View, StyleSheet } from 'react-native';
-import { launchImageLibrary } from '@eugeniuszx/react-native-media-picker';
+import {
+  Button,
+  Image,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import {
+  launchImageLibrary,
+  type Asset,
+} from '@eugeniuszx/react-native-media-picker';
 
 export default function App() {
-  const [status, setStatus] = useState('—');
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [status, setStatus] = useState('idle');
 
-  const pick = async () => {
-    const result = await launchImageLibrary({ mediaType: 'photo' });
-    if (result.didCancel) {
-      setStatus('cancelled');
-    } else if (result.errorCode) {
-      setStatus(`error: ${result.errorCode}`);
-    } else {
-      setStatus(`picked ${result.assets?.length ?? 0} asset(s)`);
-    }
+  const pick = (selectionLimit: number, includeBase64: boolean) => {
+    setStatus('picking…');
+    launchImageLibrary({
+      selectionLimit,
+      maxWidth: 640,
+      maxHeight: 640,
+      quality: 0.8,
+      includeBase64,
+    })
+      .then((res) => {
+        if (res.didCancel) {
+          setStatus('cancelled');
+          return;
+        }
+        if (res.errorCode) {
+          setStatus(`error: ${res.errorCode} ${res.errorMessage ?? ''}`);
+          return;
+        }
+        setStatus(`got ${res.assets?.length ?? 0} asset(s)`);
+        setAssets(res.assets ?? []);
+      })
+      .catch((e: unknown) => {
+        setStatus(`threw: ${String(e)}`);
+      });
   };
 
   return (
-    <View style={styles.container}>
-      <Button title="Pick photo" onPress={pick} />
-      <Text style={styles.status}>{status}</Text>
-    </View>
+    <SafeAreaView style={styles.root}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Button title="Pick single" onPress={() => pick(1, false)} />
+        <Button title="Pick multiple (5)" onPress={() => pick(5, false)} />
+        <Button title="Pick single + base64" onPress={() => pick(1, true)} />
+        <Text style={styles.status}>{status}</Text>
+        {assets.map((a) => (
+          <View key={a.uri} style={styles.card}>
+            <Image source={{ uri: a.uri }} style={styles.image} />
+            <Text>{`${a.width}x${a.height} • ${a.fileSize ?? '?'}B`}</Text>
+            <Text numberOfLines={1}>{a.uri}</Text>
+            <Text>{`base64: ${a.base64 ? `${a.base64.length} chars` : 'none'}`}</Text>
+          </View>
+        ))}
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
+  root: { flex: 1 },
+  content: { padding: 16, gap: 12 },
+  status: { fontWeight: '600', marginVertical: 8 },
+  card: {
+    gap: 4,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    padding: 8,
+    borderRadius: 8,
   },
-  status: {
-    fontSize: 16,
-    color: '#333',
-  },
+  image: { width: 160, height: 160, resizeMode: 'cover' },
 });
