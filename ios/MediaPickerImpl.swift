@@ -19,6 +19,11 @@ import UIKit
     includeBase64: Bool,
     completion: @escaping ([[String: Any]]?, Bool, String?, String?) -> Void
   ) {
+    if resolve != nil {
+      completion(nil, false, "others", "Already waiting for an image pick.")
+      return
+    }
+
     self.resolve = completion
     self.maxWidth = CGFloat(maxWidth)
     self.maxHeight = CGFloat(maxHeight)
@@ -52,25 +57,41 @@ import UIKit
     }
 
     let group = DispatchGroup()
-    var assets: [[String: Any]] = []
+    // Pre-sized, index-addressed slots preserve the user's selection order even
+    // though loadObject completions arrive out of order.
+    var slots = [[String: Any]?](repeating: nil, count: results.count)
     let lock = NSLock()
 
-    for result in results {
-      group.enter()
+    // TODO(phase-2): cap concurrency for large unlimited selections to bound peak memory.
+    for (index, result) in results.enumerated() {
       let provider = result.itemProvider
-      provider.loadObject(ofClass: UIImage.self) { object, _ in
+      guard provider.canLoadObject(ofClass: UIImage.self) else { continue }
+      group.enter()
+      provider.loadObject(ofClass: UIImage.self) { [weak self] object, error in
         defer { group.leave() }
+        guard let self else { return }
+        if let error {
+          NSLog("[ReactNativeMediaPicker] failed to load image: %@", error.localizedDescription)
+          return
+        }
         guard let image = object as? UIImage else { return }
         if let asset = self.processImage(image) {
           lock.lock()
-          assets.append(asset)
+          slots[index] = asset
           lock.unlock()
         }
       }
     }
 
-    group.notify(queue: .main) {
-      self.finish(assets, false, nil, nil)
+    group.notify(queue: .main) { [weak self] in
+      guard let self else { return }
+      let assets = slots.compactMap { $0 }
+      if assets.isEmpty {
+        // Selection was non-empty but every item failed to load/process.
+        self.finish(nil, false, "others", "Failed to load the selected image(s).")
+      } else {
+        self.finish(assets, false, nil, nil)
+      }
     }
   }
 
@@ -86,13 +107,16 @@ import UIKit
       return nil
     }
 
+    let pixelWidth = resized.cgImage?.width ?? Int(resized.size.width * resized.scale)
+    let pixelHeight = resized.cgImage?.height ?? Int(resized.size.height * resized.scale)
+
     var asset: [String: Any] = [
       "uri": fileURL.absoluteString,
       "type": "image/jpeg",
       "fileName": fileName,
       "fileSize": data.count,
-      "width": Int(resized.size.width * resized.scale),
-      "height": Int(resized.size.height * resized.scale),
+      "width": pixelWidth,
+      "height": pixelHeight,
     ]
     if includeBase64 {
       asset["base64"] = data.base64EncodedString()
