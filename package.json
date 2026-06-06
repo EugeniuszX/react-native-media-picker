@@ -56,7 +56,8 @@
   },
   "homepage": "https://github.com/EugeniuszX/react-native-media-picker#readme",
   "publishConfig": {
-    "registry": "https://registry.npmjs.org/"
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
   },
   "devDependencies": {
     "@commitlint/config-conventional": "^20.5.0",
