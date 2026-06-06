@@ -18,7 +18,7 @@ describe('normalizeLibraryOptions', () => {
     expect(normalizeLibraryOptions({ quality: 0.7 }).quality).toBe(0.7);
   });
 
-  it('floors negative selectionLimit / dimensions to 0', () => {
+  it('clamps negative selectionLimit / dimensions to 0', () => {
     const r = normalizeLibraryOptions({
       selectionLimit: -3,
       maxWidth: -10,
@@ -27,6 +27,17 @@ describe('normalizeLibraryOptions', () => {
     expect(r.selectionLimit).toBe(0);
     expect(r.maxWidth).toBe(0);
     expect(r.maxHeight).toBe(0);
+  });
+
+  it('truncates fractional selectionLimit / dimensions to integers', () => {
+    const r = normalizeLibraryOptions({
+      selectionLimit: 2.9,
+      maxWidth: 640.7,
+      maxHeight: 480.5,
+    });
+    expect(r.selectionLimit).toBe(2);
+    expect(r.maxWidth).toBe(640);
+    expect(r.maxHeight).toBe(480);
   });
 
   it('falls back to "photo" for an invalid mediaType', () => {

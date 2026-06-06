@@ -1,7 +1,9 @@
 {
   "exclude": [
     "example",
-    "lib"
+    "lib",
+    "src/__tests__",
+    "src/__mocks__"
   ],
   "compilerOptions": {
     "rootDir": ".",
@@ -29,7 +31,6 @@
     "skipLibCheck": true,
     "strict": true,
     "target": "ESNext",
-    "types": ["jest"],
     "verbatimModuleSyntax": true
   }
 }

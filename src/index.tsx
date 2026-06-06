@@ -27,8 +27,13 @@ const VALID_MEDIA_TYPES: ReadonlyArray<MediaType> = ['photo', 'video', 'mixed'];
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), max);
 
-const floorAtZero = (value: number): number => (value < 0 ? 0 : value);
+const clampMin0 = (value: number): number => Math.max(value, 0);
 
+/**
+ * @internal
+ * Exported only for testing purposes. This function is not part of the public
+ * API and may change between versions without a semver bump.
+ */
 export const normalizeLibraryOptions = (
   options: LibraryOptions
 ): NativeLibraryOptions => {
@@ -39,9 +44,9 @@ export const normalizeLibraryOptions = (
 
   return {
     mediaType,
-    selectionLimit: floorAtZero(options.selectionLimit ?? 1),
-    maxWidth: floorAtZero(options.maxWidth ?? 0),
-    maxHeight: floorAtZero(options.maxHeight ?? 0),
+    selectionLimit: Math.trunc(clampMin0(options.selectionLimit ?? 1)),
+    maxWidth: Math.trunc(clampMin0(options.maxWidth ?? 0)),
+    maxHeight: Math.trunc(clampMin0(options.maxHeight ?? 0)),
     quality: clamp(options.quality ?? 1, 0, 1),
     includeBase64: options.includeBase64 ?? false,
   };
