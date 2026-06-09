@@ -1,7 +1,9 @@
 package com.eugeniuszx.reactnativemediapicker
 
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
@@ -9,6 +11,8 @@ import android.net.Uri
 import android.provider.MediaStore
 import android.util.Base64
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.exifinterface.media.ExifInterface
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
@@ -16,6 +20,8 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.WritableArray
 import com.facebook.react.bridge.WritableMap
+import com.facebook.react.modules.core.PermissionAwareActivity
+import com.facebook.react.modules.core.PermissionListener
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -37,6 +43,8 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
   @Volatile private var quality: Int = 100
   @Volatile private var includeBase64: Boolean = false
   @Volatile private var selectionLimit: Int = 1
+  @Volatile private var cameraType: String = "back"
+  @Volatile private var cameraFile: File? = null
 
   init {
     reactContext.addActivityEventListener(this)
@@ -94,12 +102,152 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
     }
   }
 
+  override fun launchCamera(options: ReadableMap, promise: Promise) {
+    val activity = reactContext.currentActivity
+    if (activity == null) {
+      promise.resolve(errorResponse("others", "Activity is null"))
+      return
+    }
+    if (pickerPromise != null) {
+      promise.resolve(errorResponse("others", "Already waiting for a pick."))
+      return
+    }
+
+    pickerPromise = promise
+
+    try {
+      this.maxWidth = options.getInt("maxWidth")
+      this.maxHeight = options.getInt("maxHeight")
+      this.quality = (options.getDouble("quality") * 100).toInt().coerceIn(0, 100)
+      this.includeBase64 = options.getBoolean("includeBase64")
+      this.cameraType = options.getString("cameraType") ?: "back"
+
+      if (isCameraPermissionDeclared() && !isCameraPermissionGranted()) {
+        requestCameraPermission(activity)
+      } else {
+        launchCameraIntent(activity)
+      }
+    } catch (e: Exception) {
+      pickerPromise = null
+      promise.resolve(errorResponse("others", e.message ?: "launch error"))
+    }
+  }
+
+  private fun isCameraPermissionDeclared(): Boolean =
+    try {
+      val info = reactContext.packageManager.getPackageInfo(
+        reactContext.packageName,
+        PackageManager.GET_PERMISSIONS,
+      )
+      info.requestedPermissions?.contains(Manifest.permission.CAMERA) == true
+    } catch (e: Exception) {
+      false
+    }
+
+  private fun isCameraPermissionGranted(): Boolean =
+    ContextCompat.checkSelfPermission(reactContext, Manifest.permission.CAMERA) ==
+      PackageManager.PERMISSION_GRANTED
+
+  private fun requestCameraPermission(activity: Activity) {
+    val listener = PermissionListener { requestCode, _, grantResults ->
+      if (requestCode != CAMERA_PERMISSION_REQUEST_CODE) {
+        return@PermissionListener false
+      }
+      val granted =
+        grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+      if (granted) {
+        val act = reactContext.currentActivity
+        if (act != null) {
+          launchCameraIntent(act)
+        } else {
+          pickerPromise?.resolve(errorResponse("others", "Activity is null"))
+          pickerPromise = null
+        }
+      } else {
+        pickerPromise?.resolve(errorResponse("permission", "Camera permission denied"))
+        pickerPromise = null
+      }
+      true
+    }
+    (activity as PermissionAwareActivity).requestPermissions(
+      arrayOf(Manifest.permission.CAMERA),
+      CAMERA_PERMISSION_REQUEST_CODE,
+      listener,
+    )
+  }
+
+  private fun launchCameraIntent(activity: Activity) {
+    val photoFile = File.createTempFile("media_picker_capture_", ".jpg", reactContext.cacheDir)
+    cameraFile = photoFile
+    val authority = "${reactContext.packageName}.rnmediapicker.fileprovider"
+    val outputUri = FileProvider.getUriForFile(reactContext, authority, photoFile)
+
+    val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+      putExtra(MediaStore.EXTRA_OUTPUT, outputUri)
+      addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+      if (cameraType == "front") {
+        putExtra("android.intent.extras.CAMERA_FACING", 1)
+        putExtra("android.intent.extras.LENS_FACING_FRONT", 1)
+        putExtra("android.intent.extra.USE_FRONT_CAMERA", true)
+      }
+    }
+
+    if (intent.resolveActivity(reactContext.packageManager) == null) {
+      cameraFile?.delete()
+      cameraFile = null
+      pickerPromise?.resolve(errorResponse("camera_unavailable", "No camera app available"))
+      pickerPromise = null
+      return
+    }
+
+    activity.startActivityForResult(intent, CAMERA_REQUEST_CODE)
+  }
+
+  private fun handleCameraResult(resultCode: Int) {
+    val promise = pickerPromise ?: return
+    pickerPromise = null
+
+    val file = cameraFile
+    cameraFile = null
+
+    if (resultCode != Activity.RESULT_OK || file == null || !file.exists() || file.length() == 0L) {
+      file?.delete()
+      promise.resolve(cancelResponse())
+      return
+    }
+
+    val reqMaxWidth = maxWidth
+    val reqMaxHeight = maxHeight
+    val reqQuality = quality
+    val reqIncludeBase64 = includeBase64
+
+    moduleScope.launch {
+      try {
+        val asset = processImage(Uri.fromFile(file), reqMaxWidth, reqMaxHeight, reqQuality, reqIncludeBase64)
+        val assets = Arguments.createArray().apply { pushMap(asset) }
+        val response = Arguments.createMap().apply {
+          putBoolean("didCancel", false)
+          putArray("assets", assets)
+        }
+        promise.resolve(response)
+      } catch (e: Exception) {
+        promise.resolve(errorResponse("others", e.message ?: "processing error"))
+      } finally {
+        file.delete()
+      }
+    }
+  }
+
   override fun onActivityResult(
     activity: Activity,
     requestCode: Int,
     resultCode: Int,
     data: Intent?,
   ) {
+    if (requestCode == CAMERA_REQUEST_CODE) {
+      handleCameraResult(resultCode)
+      return
+    }
     if (requestCode != REQUEST_CODE) return
 
     val promise = pickerPromise ?: return
@@ -272,5 +420,7 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
   companion object {
     const val NAME = NativeReactNativeMediaPickerSpec.NAME
     private const val REQUEST_CODE = 48211
+    private const val CAMERA_REQUEST_CODE = 48212
+    private const val CAMERA_PERMISSION_REQUEST_CODE = 48213
   }
 }
