@@ -1,6 +1,6 @@
 {
   "name": "@eugeniuszx/react-native-media-picker",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Cross-platform media picker for React Native (New Architecture) — no permission gallery access",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
