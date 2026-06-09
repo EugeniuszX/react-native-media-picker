@@ -169,7 +169,15 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
       }
       true
     }
-    (activity as PermissionAwareActivity).requestPermissions(
+    val permissionActivity = activity as? PermissionAwareActivity
+    if (permissionActivity == null) {
+      pickerPromise?.resolve(
+        errorResponse("others", "Host activity does not support runtime permission requests")
+      )
+      pickerPromise = null
+      return
+    }
+    permissionActivity.requestPermissions(
       arrayOf(Manifest.permission.CAMERA),
       CAMERA_PERMISSION_REQUEST_CODE,
       listener,
