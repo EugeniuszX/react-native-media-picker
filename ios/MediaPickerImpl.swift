@@ -2,7 +2,8 @@ import Foundation
 import PhotosUI
 import UIKit
 
-@objc public class MediaPickerImpl: NSObject, PHPickerViewControllerDelegate {
+@objc public class MediaPickerImpl: NSObject, PHPickerViewControllerDelegate,
+  UIImagePickerControllerDelegate, UINavigationControllerDelegate {
 
   private var resolve: (([[String: Any]]?, Bool, String?, String?) -> Void)?
   private var maxWidth: CGFloat = 0
@@ -43,6 +44,63 @@ import UIKit
       }
       presenter.present(picker, animated: true)
     }
+  }
+
+  @objc public func launchCamera(
+    _ cameraType: String,
+    maxWidth: Double,
+    maxHeight: Double,
+    quality: Double,
+    includeBase64: Bool,
+    completion: @escaping ([[String: Any]]?, Bool, String?, String?) -> Void
+  ) {
+    if resolve != nil {
+      completion(nil, false, "others", "Already waiting for an image pick.")
+      return
+    }
+    guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+      completion(nil, false, "camera_unavailable", "Camera is not available on this device")
+      return
+    }
+
+    self.resolve = completion
+    self.maxWidth = CGFloat(maxWidth)
+    self.maxHeight = CGFloat(maxHeight)
+    self.quality = CGFloat(quality)
+    self.includeBase64 = includeBase64
+
+    DispatchQueue.main.async {
+      let picker = UIImagePickerController()
+      picker.sourceType = .camera
+      picker.delegate = self
+      if cameraType == "front", UIImagePickerController.isCameraDeviceAvailable(.front) {
+        picker.cameraDevice = .front
+      }
+      guard let presenter = Self.topViewController() else {
+        self.finish(nil, false, "others", "No view controller to present from")
+        return
+      }
+      presenter.present(picker, animated: true)
+    }
+  }
+
+  public func imagePickerController(
+    _ picker: UIImagePickerController,
+    didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+  ) {
+    picker.dismiss(animated: true)
+    guard let image = info[.originalImage] as? UIImage,
+          let asset = processImage(image)
+    else {
+      finish(nil, false, "others", "Failed to capture image")
+      return
+    }
+    finish([asset], false, nil, nil)
+  }
+
+  public func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+    picker.dismiss(animated: true)
+    finish(nil, true, nil, nil)
   }
 
   public func picker(

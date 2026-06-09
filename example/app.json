@@ -33,6 +33,9 @@
     "package": "eugeniuszx.reactnativemediapicker.example"
   },
   "ios": {
-    "bundleIdentifier": "eugeniuszx.reactnativemediapicker.example"
+    "bundleIdentifier": "eugeniuszx.reactnativemediapicker.example",
+    "infoPlist": {
+      "NSCameraUsageDescription": "Take photos to attach"
+    }
   }
 }
