@@ -56,7 +56,7 @@ import UIKit
     completion: @escaping ([[String: Any]]?, Bool, String?, String?) -> Void
   ) {
     if resolve != nil {
-      completion(nil, false, "others", "Already waiting for an image pick.")
+      completion(nil, false, "others", "Already waiting for a pick.")
       return
     }
     guard UIImagePickerController.isSourceTypeAvailable(.camera) else {

@@ -78,7 +78,7 @@ const result = await launchCamera({
 
 ## Response & error handling
 
-`launchImageLibrary` **never rejects** — it always resolves a `PickerResponse`:
+`launchImageLibrary` and `launchCamera` **never reject** — they always resolve a `PickerResponse`:
 
 - **Success:** `{ didCancel: false, assets: Asset[] }`
 - **Cancelled:** `{ didCancel: true }`
