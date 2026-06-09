@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import PhotosUI
 import UIKit
@@ -69,6 +70,26 @@ import UIKit
     self.quality = CGFloat(quality)
     self.includeBase64 = includeBase64
 
+    switch AVCaptureDevice.authorizationStatus(for: .video) {
+    case .authorized:
+      presentCamera(cameraType: cameraType)
+    case .notDetermined:
+      AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+        guard let self else { return }
+        if granted {
+          self.presentCamera(cameraType: cameraType)
+        } else {
+          self.finish(nil, false, "permission", "Camera permission denied")
+        }
+      }
+    case .denied, .restricted:
+      finish(nil, false, "permission", "Camera permission denied")
+    @unknown default:
+      finish(nil, false, "permission", "Camera permission unavailable")
+    }
+  }
+
+  private func presentCamera(cameraType: String) {
     DispatchQueue.main.async {
       let picker = UIImagePickerController()
       picker.sourceType = .camera
@@ -89,13 +110,18 @@ import UIKit
     didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
   ) {
     picker.dismiss(animated: true)
-    guard let image = info[.originalImage] as? UIImage,
-          let asset = processImage(image)
-    else {
+    guard let image = info[.originalImage] as? UIImage else {
       finish(nil, false, "others", "Failed to capture image")
       return
     }
-    finish([asset], false, nil, nil)
+    DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+      guard let self else { return }
+      guard let asset = self.processImage(image) else {
+        self.finish(nil, false, "others", "Failed to capture image")
+        return
+      }
+      self.finish([asset], false, nil, nil)
+    }
   }
 
   public func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
