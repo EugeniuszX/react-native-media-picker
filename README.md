@@ -1,7 +1,13 @@
 # @eugeniuszx/react-native-media-picker
 
+[![npm version](https://img.shields.io/npm/v/@eugeniuszx/react-native-media-picker.svg)](https://www.npmjs.com/package/@eugeniuszx/react-native-media-picker)
+[![npm downloads](https://img.shields.io/npm/dm/@eugeniuszx/react-native-media-picker.svg)](https://www.npmjs.com/package/@eugeniuszx/react-native-media-picker)
+[![license](https://img.shields.io/npm/l/@eugeniuszx/react-native-media-picker.svg)](./LICENSE)
+
 Cross-platform media picker for React Native (New Architecture). Gallery access
 requires **no runtime permissions** on iOS (PHPicker) or Android (Photo Picker).
+
+📦 **npm:** https://www.npmjs.com/package/@eugeniuszx/react-native-media-picker
 
 > Requires React Native 0.76+ with the New Architecture enabled.
 
