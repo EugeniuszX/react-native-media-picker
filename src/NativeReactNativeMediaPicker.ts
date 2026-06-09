@@ -31,8 +31,18 @@ export type NativeLibraryOptions = {
   includeBase64: boolean;
 };
 
+// Fully-populated camera options; the TS wrapper fills every field before the call.
+export type NativeCameraOptions = {
+  cameraType: string;
+  maxWidth: number;
+  maxHeight: number;
+  quality: number;
+  includeBase64: boolean;
+};
+
 export interface Spec extends TurboModule {
   launchImageLibrary(options: NativeLibraryOptions): Promise<PickerResponse>;
+  launchCamera(options: NativeCameraOptions): Promise<PickerResponse>;
 }
 
 export default TurboModuleRegistry.getEnforcing<Spec>('ReactNativeMediaPicker');
