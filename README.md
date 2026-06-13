@@ -44,14 +44,31 @@ if (!result.didCancel && result.assets) {
 | `selectionLimit` | `number` | `1` | `0` = unlimited |
 | `maxWidth` | `number` | `0` | `0` = no resize |
 | `maxHeight` | `number` | `0` | `0` = no resize |
-| `quality` | `number` | `1` | JPEG quality 0..1 |
+| `quality` | `number` | `1` | Re-encode quality 0..1 (JPEG/WebP; ignored for lossless PNG) |
 | `includeBase64` | `boolean` | `false` | adds `base64` to each asset |
 
 ## `Asset`
 
-Each picked item resolves to: `uri` (a `file://` path to a temp JPEG), `type`
-(`"image/jpeg"`), `fileName`, `fileSize`, `width`, `height`, and `base64` (only when
-`includeBase64` is true).
+Each picked item resolves to: `uri` (a `file://` path to a temp file), `type`
+(the source mime — `image/jpeg`, `image/png`, `image/heic`, `image/gif`, or
+`image/webp`), `fileName` (extension matches `type`), `fileSize`, `width`,
+`height`, and `base64` (only when `includeBase64` is true).
+
+### Format handling
+
+The original format is preserved:
+
+- **No resize needed** (no `maxWidth`/`maxHeight`, or the image is already within
+  bounds): the original bytes are returned unchanged. `quality` only applies when
+  a resize forces a re-encode.
+- **Resize needed:** the image is re-encoded in its source format — PNG stays PNG
+  (transparency preserved), JPEG stays JPEG. **Exceptions:** HEIC stays HEIC on
+  iOS but becomes `image/jpeg` on Android (no system HEIC encoder), and also falls
+  back to `image/jpeg` on iOS Simulator / older devices without a HEIC encoder;
+  WebP becomes `image/jpeg` on iOS (no system WebP encoder).
+- **Animated images** (GIF, animated WebP): always returned untouched;
+  `maxWidth`/`maxHeight`/`quality` are ignored so the animation survives.
+- **Camera captures** are always `image/jpeg`.
 
 ## Camera
 
@@ -74,7 +91,7 @@ const result = await launchCamera({
 | `cameraType` | `'back' \| 'front'` | `'back'` | Honored on iOS; **best-effort on Android** (the system camera app may ignore it) |
 | `maxWidth` | `number` | `0` | `0` = no resize |
 | `maxHeight` | `number` | `0` | `0` = no resize |
-| `quality` | `number` | `1` | JPEG quality 0..1 |
+| `quality` | `number` | `1` | Re-encode quality 0..1 (JPEG/WebP; ignored for lossless PNG) |
 | `includeBase64` | `boolean` | `false` | adds `base64` to the captured asset |
 
 ### Camera permissions

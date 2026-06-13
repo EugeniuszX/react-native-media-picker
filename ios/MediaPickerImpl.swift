@@ -1,7 +1,9 @@
 import AVFoundation
 import Foundation
+import ImageIO
 import PhotosUI
 import UIKit
+import UniformTypeIdentifiers
 
 @objc public class MediaPickerImpl: NSObject, PHPickerViewControllerDelegate,
   UIImagePickerControllerDelegate, UINavigationControllerDelegate {
@@ -142,28 +144,35 @@ import UIKit
 
     let group = DispatchGroup()
     // Pre-sized, index-addressed slots preserve the user's selection order even
-    // though loadObject completions arrive out of order.
+    // though load completions arrive out of order.
     var slots = [[String: Any]?](repeating: nil, count: results.count)
     let lock = NSLock()
 
     // TODO(phase-2): cap concurrency for large unlimited selections to bound peak memory.
+    // NOTE(phase-2): loadDataRepresentation fires for every selected item with no
+    // concurrency cap, and each item now holds original bytes + a decoded UIImage
+    // (resize path) + encoded output at once — materially higher peak memory than
+    // the old decoded-bitmap-only path. Cap concurrency for large unlimited picks.
     for (index, result) in results.enumerated() {
       let provider = result.itemProvider
-      guard provider.canLoadObject(ofClass: UIImage.self) else { continue }
+      guard let uti = provider.registeredTypeIdentifiers.first(where: {
+        UTType($0)?.conforms(to: .image) == true
+      }) else {
+        NSLog("[ReactNativeMediaPicker] skipping item at index \(index): no image UTI")
+        continue
+      }
       group.enter()
-      provider.loadObject(ofClass: UIImage.self) { [weak self] object, error in
+      provider.loadDataRepresentation(forTypeIdentifier: uti) { [weak self] data, error in
         defer { group.leave() }
         guard let self else { return }
         if let error {
           NSLog("[ReactNativeMediaPicker] failed to load image: %@", error.localizedDescription)
           return
         }
-        guard let image = object as? UIImage else { return }
-        if let asset = self.processImage(image) {
-          lock.lock()
-          slots[index] = asset
-          lock.unlock()
-        }
+        guard let data, let asset = self.processData(data, uti: uti) else { return }
+        lock.lock()
+        slots[index] = asset
+        lock.unlock()
       }
     }
 
@@ -177,6 +186,177 @@ import UIKit
         self.finish(assets, false, nil, nil)
       }
     }
+  }
+
+  // MARK: - Format helpers
+
+  private func mime(forUTI uti: String) -> String {
+    switch uti {
+    case "public.png": return "image/png"
+    case "public.heic", "public.heif": return "image/heic"
+    case "com.compuserve.gif": return "image/gif"
+    case "org.webmproject.webp": return "image/webp"
+    default: return "image/jpeg"
+    }
+  }
+
+  private func ext(forMime mime: String) -> String {
+    switch mime {
+    case "image/png": return "png"
+    case "image/heic": return "heic"
+    case "image/gif": return "gif"
+    case "image/webp": return "webp"
+    default: return "jpg"
+    }
+  }
+
+  /// Animated-WebP detection via the RIFF/VP8X header (animation = flag bit 0x02
+  /// at offset 20). GIF is always treated as animated by the caller.
+  private func isAnimatedWebp(_ data: Data) -> Bool {
+    guard data.count >= 21 else { return false }
+    let b = [UInt8](data.prefix(21))
+    guard b[0] == 0x52, b[1] == 0x49, b[2] == 0x46, b[3] == 0x46, // RIFF
+          b[8] == 0x57, b[9] == 0x45, b[10] == 0x42, b[11] == 0x50, // WEBP
+          b[12] == 0x56, b[13] == 0x50, b[14] == 0x38, b[15] == 0x58 // VP8X
+    else { return false }
+    return (b[20] & 0x02) != 0
+  }
+
+  // MARK: - Library pipeline (preserves source format)
+
+  /// Builds an asset dict from raw picked bytes, deciding passthrough vs transform.
+  private func processData(_ data: Data, uti: String) -> [String: Any]? {
+    let srcMime = mime(forUTI: uti)
+    let animated = srcMime == "image/gif" || (srcMime == "image/webp" && isAnimatedWebp(data))
+
+    if animated {
+      return writePassthrough(data, mime: srcMime)
+    }
+
+    // No resize bound → return original bytes without decoding to a bitmap.
+    guard maxWidth > 0 || maxHeight > 0 else {
+      return writePassthrough(data, mime: srcMime)
+    }
+
+    guard let image = UIImage(data: data) else { return nil }
+    let needsResize =
+      image.size.width > effectiveMaxWidth(image) || image.size.height > effectiveMaxHeight(image)
+
+    if !needsResize {
+      return writePassthrough(data, mime: srcMime)
+    }
+    return writeTransformed(image, srcMime: srcMime)
+  }
+
+  private func effectiveMaxWidth(_ image: UIImage) -> CGFloat {
+    maxWidth > 0 ? maxWidth : image.size.width
+  }
+
+  private func effectiveMaxHeight(_ image: UIImage) -> CGFloat {
+    maxHeight > 0 ? maxHeight : image.size.height
+  }
+
+  /// Writes original encoded bytes verbatim; reports the source format.
+  private func writePassthrough(_ data: Data, mime: String) -> [String: Any]? {
+    let fileExt = ext(forMime: mime)
+    let fileName = "media_picker_\(UUID().uuidString).\(fileExt)"
+    let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+    do {
+      try data.write(to: fileURL)
+    } catch {
+      return nil
+    }
+    let source = CGImageSourceCreateWithData(data as CFData, nil)
+    let props = source.flatMap {
+      CGImageSourceCopyPropertiesAtIndex($0, 0, nil) as? [CFString: Any]
+    }
+    let pixelWidth = (props?[kCGImagePropertyPixelWidth] as? Int) ?? 0
+    let pixelHeight = (props?[kCGImagePropertyPixelHeight] as? Int) ?? 0
+    if pixelWidth == 0 || pixelHeight == 0 {
+      NSLog("[ReactNativeMediaPicker] warning: could not read image dimensions from source")
+    }
+    // EXIF orientations 5–8 are the 90°/270° rotations that transpose the stored
+    // buffer's axes; swap so reported dimensions match how the image displays
+    // (mirrors the Android passthrough path).
+    let orientation = (props?[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1
+    let axisSwapped = (5...8).contains(orientation)
+    let width = axisSwapped ? pixelHeight : pixelWidth
+    let height = axisSwapped ? pixelWidth : pixelHeight
+
+    var asset: [String: Any] = [
+      "uri": fileURL.absoluteString,
+      "type": mime,
+      "fileName": fileName,
+      "fileSize": data.count,
+      "width": width,
+      "height": height,
+    ]
+    if includeBase64 {
+      asset["base64"] = data.base64EncodedString()
+    }
+    return asset
+  }
+
+  /// Resizes and re-encodes in the source format; HEIC stays HEIC, WebP → JPEG.
+  private func writeTransformed(_ image: UIImage, srcMime: String) -> [String: Any]? {
+    let resized = resizeToFit(image)
+
+    let outMime: String
+    let encoded: Data?
+    switch srcMime {
+    case "image/png":
+      outMime = "image/png"
+      encoded = resized.pngData()
+    case "image/heic":
+      if let heic = heicData(from: resized, quality: quality) {
+        outMime = "image/heic"
+        encoded = heic
+      } else {
+        // HEIC encoder unavailable (Simulator, pre-A10 devices) — fall back to
+        // JPEG, mirroring Android. ext(forMime:) keeps file/type consistent.
+        outMime = "image/jpeg"
+        encoded = resized.jpegData(compressionQuality: quality)
+      }
+    default: // jpeg, and webp (no iOS encoder) → jpeg fallback
+      outMime = "image/jpeg"
+      encoded = resized.jpegData(compressionQuality: quality)
+    }
+    guard let data = encoded else { return nil }
+
+    let fileExt = ext(forMime: outMime)
+    let fileName = "media_picker_\(UUID().uuidString).\(fileExt)"
+    let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+    do {
+      try data.write(to: fileURL)
+    } catch {
+      return nil
+    }
+    let (pixelWidth, pixelHeight) = pixelSize(of: resized)
+
+    var asset: [String: Any] = [
+      "uri": fileURL.absoluteString,
+      "type": outMime,
+      "fileName": fileName,
+      "fileSize": data.count,
+      "width": pixelWidth,
+      "height": pixelHeight,
+    ]
+    if includeBase64 {
+      asset["base64"] = data.base64EncodedString()
+    }
+    return asset
+  }
+
+  private func heicData(from image: UIImage, quality: CGFloat) -> Data? {
+    guard let cg = image.cgImage else { return nil }
+    let out = NSMutableData()
+    guard let dest = CGImageDestinationCreateWithData(
+      out, "public.heic" as CFString, 1, nil
+    ) else { return nil }
+    let options = [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary
+    CGImageDestinationAddImage(dest, cg, options)
+    guard CGImageDestinationFinalize(dest) else { return nil }
+    return out as Data
   }
 
   private func processImage(_ image: UIImage) -> [String: Any]? {

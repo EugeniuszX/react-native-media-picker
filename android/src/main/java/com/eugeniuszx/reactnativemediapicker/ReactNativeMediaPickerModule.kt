@@ -281,6 +281,9 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
     val reqQuality = quality
     val reqIncludeBase64 = includeBase64
 
+    // NOTE: a single failed URI fails the whole batch here (all-or-nothing),
+    // whereas iOS drops only the failed item. Kept as-is for now; revisit if
+    // partial-success parity is needed.
     moduleScope.launch {
       try {
         val assets: WritableArray = Arguments.createArray()
@@ -327,9 +330,10 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
     }
 
   /**
-   * Decodes, rotates, scales and JPEG-compresses [uri] into a temp file in cacheDir.
-   * The returned file lives in the app cache; the caller owns its lifecycle (the OS
-   * reclaims cacheDir under storage pressure).
+   * Decodes [uri], deciding between a lossless passthrough (animated images, or
+   * when no resize is needed) and a transform (decode → EXIF-rotate → scale →
+   * re-encode in the source format, with HEIC/GIF falling back to JPEG).
+   * The returned file lives in cacheDir; the caller owns its lifecycle.
    */
   private fun processImage(
     uri: Uri,
@@ -339,11 +343,87 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
     includeBase64: Boolean,
   ): WritableMap {
     val resolver = reactContext.contentResolver
-    val reqW = if (maxWidth > 0) maxWidth else Int.MAX_VALUE
-    val reqH = if (maxHeight > 0) maxHeight else Int.MAX_VALUE
+    val srcMime = MediaFormat.normalizeMime(resolver.getType(uri))
+
+    // GIF and animated WebP can't be re-encoded frame-by-frame, so they always
+    // pass through untouched (resize is intentionally ignored for them).
+    val usePassthroughFormat = srcMime == "image/gif" ||
+      (srcMime == "image/webp" && isAnimatedWebpUri(uri))
 
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     resolver.openInputStream(uri).use { BitmapFactory.decodeStream(it, null, bounds) }
+
+    val resizeRequested = maxWidth > 0 || maxHeight > 0
+    val exceedsBounds =
+      (maxWidth > 0 && bounds.outWidth > maxWidth) ||
+      (maxHeight > 0 && bounds.outHeight > maxHeight)
+
+    return if (usePassthroughFormat || !resizeRequested || !exceedsBounds) {
+      passthrough(uri, srcMime, bounds.outWidth, bounds.outHeight, includeBase64)
+    } else {
+      transform(uri, srcMime, bounds, maxWidth, maxHeight, quality, includeBase64)
+    }
+  }
+
+  /** Copies the original encoded bytes verbatim, preserving format and EXIF. */
+  private fun passthrough(
+    uri: Uri,
+    mime: String,
+    srcWidth: Int,
+    srcHeight: Int,
+    includeBase64: Boolean,
+  ): WritableMap {
+    val resolver = reactContext.contentResolver
+    val ext = MediaFormat.extensionForMime(mime)
+    val outFile = File.createTempFile("media_picker_", ".$ext", reactContext.cacheDir)
+
+    // Stream-copy by default (low memory); only hold bytes in memory when base64
+    // is requested, to avoid reading the file twice.
+    var base64: String? = null
+    resolver.openInputStream(uri).use { input ->
+      input ?: throw IllegalStateException("Failed to open image stream")
+      if (includeBase64) {
+        val bytes = input.readBytes()
+        outFile.writeBytes(bytes)
+        base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+      } else {
+        FileOutputStream(outFile).use { output -> input.copyTo(output) }
+      }
+    }
+
+    // GIF carries no EXIF, so isExifAxisSwapped returns false for it; the others
+    // honor the orientation tag so reported dimensions match how it's displayed.
+    val swap = isExifAxisSwapped(uri)
+    val width = (if (swap) srcHeight else srcWidth).coerceAtLeast(0)
+    val height = (if (swap) srcWidth else srcHeight).coerceAtLeast(0)
+
+    return Arguments.createMap().apply {
+      putString("uri", Uri.fromFile(outFile).toString())
+      putString("type", mime)
+      putString("fileName", outFile.name)
+      putDouble("fileSize", outFile.length().toDouble())
+      putInt("width", width)
+      putInt("height", height)
+      val b64 = base64
+      if (b64 != null) {
+        putString("base64", b64)
+      }
+    }
+  }
+
+  /** Decodes, rotates, scales and re-encodes in the source format (HEIC/GIF → JPEG). */
+  private fun transform(
+    uri: Uri,
+    srcMime: String,
+    bounds: BitmapFactory.Options,
+    maxWidth: Int,
+    maxHeight: Int,
+    quality: Int,
+    includeBase64: Boolean,
+  ): WritableMap {
+    val resolver = reactContext.contentResolver
+    val reqW = if (maxWidth > 0) maxWidth else Int.MAX_VALUE
+    val reqH = if (maxHeight > 0) maxHeight else Int.MAX_VALUE
 
     val decodeOpts = BitmapFactory.Options().apply {
       inSampleSize = calculateInSampleSize(bounds.outWidth, bounds.outHeight, reqW, reqH)
@@ -355,12 +435,21 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
     bitmap = applyExifRotation(uri, bitmap)
     bitmap = scaleToFit(bitmap, reqW, reqH)
 
-    val baos = ByteArrayOutputStream()
-    bitmap.compress(Bitmap.CompressFormat.JPEG, quality, baos)
-    val jpegBytes = baos.toByteArray()
+    val outFormat = MediaFormat.reencodeFormat(srcMime)
+    val compressFormat = when (outFormat) {
+      MediaFormat.OutputFormat.PNG -> Bitmap.CompressFormat.PNG
+      MediaFormat.OutputFormat.WEBP -> webpCompressFormat()
+      MediaFormat.OutputFormat.JPEG -> Bitmap.CompressFormat.JPEG
+    }
+    val outMime = MediaFormat.reencodeMime(outFormat)
+    val ext = MediaFormat.extensionForMime(outMime)
 
-    val outFile = File.createTempFile("media_picker_", ".jpg", reactContext.cacheDir)
-    FileOutputStream(outFile).use { it.write(jpegBytes) }
+    val baos = ByteArrayOutputStream()
+    bitmap.compress(compressFormat, quality, baos)
+    val bytes = baos.toByteArray()
+
+    val outFile = File.createTempFile("media_picker_", ".$ext", reactContext.cacheDir)
+    FileOutputStream(outFile).use { it.write(bytes) }
 
     val width = bitmap.width
     val height = bitmap.height
@@ -368,15 +457,54 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
 
     return Arguments.createMap().apply {
       putString("uri", Uri.fromFile(outFile).toString())
-      putString("type", "image/jpeg")
+      putString("type", outMime)
       putString("fileName", outFile.name)
-      putDouble("fileSize", jpegBytes.size.toDouble())
+      putDouble("fileSize", bytes.size.toDouble())
       putInt("width", width)
       putInt("height", height)
       if (includeBase64) {
-        putString("base64", Base64.encodeToString(jpegBytes, Base64.NO_WRAP))
+        putString("base64", Base64.encodeToString(bytes, Base64.NO_WRAP))
       }
     }
+  }
+
+  @Suppress("DEPRECATION")
+  private fun webpCompressFormat(): Bitmap.CompressFormat =
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+      Bitmap.CompressFormat.WEBP_LOSSY
+    } else {
+      Bitmap.CompressFormat.WEBP
+    }
+
+  private fun isAnimatedWebpUri(uri: Uri): Boolean =
+    try {
+      reactContext.contentResolver.openInputStream(uri).use { stream ->
+        stream ?: return false
+        val header = ByteArray(21)
+        var total = 0
+        while (total < header.size) {
+          val n = stream.read(header, total, header.size - total)
+          if (n == -1) break
+          total += n
+        }
+        total >= 21 && MediaFormat.isAnimatedWebp(header)
+      }
+    } catch (e: Exception) {
+      false
+    }
+
+  private fun isExifAxisSwapped(uri: Uri): Boolean {
+    val orientation = reactContext.contentResolver.openInputStream(uri).use { stream ->
+      stream ?: return false
+      ExifInterface(stream).getAttributeInt(
+        ExifInterface.TAG_ORIENTATION,
+        ExifInterface.ORIENTATION_NORMAL,
+      )
+    }
+    return orientation == ExifInterface.ORIENTATION_ROTATE_90 ||
+      orientation == ExifInterface.ORIENTATION_ROTATE_270 ||
+      orientation == ExifInterface.ORIENTATION_TRANSPOSE ||
+      orientation == ExifInterface.ORIENTATION_TRANSVERSE
   }
 
   private fun calculateInSampleSize(srcW: Int, srcH: Int, reqW: Int, reqH: Int): Int {
