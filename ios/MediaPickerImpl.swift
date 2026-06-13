@@ -149,11 +149,18 @@ import UniformTypeIdentifiers
     let lock = NSLock()
 
     // TODO(phase-2): cap concurrency for large unlimited selections to bound peak memory.
+    // NOTE(phase-2): loadDataRepresentation fires for every selected item with no
+    // concurrency cap, and each item now holds original bytes + a decoded UIImage
+    // (resize path) + encoded output at once — materially higher peak memory than
+    // the old decoded-bitmap-only path. Cap concurrency for large unlimited picks.
     for (index, result) in results.enumerated() {
       let provider = result.itemProvider
       guard let uti = provider.registeredTypeIdentifiers.first(where: {
         UTType($0)?.conforms(to: .image) == true
-      }) else { continue }
+      }) else {
+        NSLog("[ReactNativeMediaPicker] skipping item at index \(index): no image UTI")
+        continue
+      }
       group.enter()
       provider.loadDataRepresentation(forTypeIdentifier: uti) { [weak self] data, error in
         defer { group.leave() }
@@ -208,10 +215,9 @@ import UniformTypeIdentifiers
   private func isAnimatedWebp(_ data: Data) -> Bool {
     guard data.count >= 21 else { return false }
     let b = [UInt8](data.prefix(21))
-    let riff: [UInt8] = [0x52, 0x49, 0x46, 0x46] // RIFF
-    let webp: [UInt8] = [0x57, 0x45, 0x42, 0x50] // WEBP
-    let vp8x: [UInt8] = [0x56, 0x50, 0x38, 0x58] // VP8X
-    guard Array(b[0..<4]) == riff, Array(b[8..<12]) == webp, Array(b[12..<16]) == vp8x
+    guard b[0] == 0x52, b[1] == 0x49, b[2] == 0x46, b[3] == 0x46, // RIFF
+          b[8] == 0x57, b[9] == 0x45, b[10] == 0x42, b[11] == 0x50, // WEBP
+          b[12] == 0x56, b[13] == 0x50, b[14] == 0x38, b[15] == 0x58 // VP8X
     else { return false }
     return (b[20] & 0x02) != 0
   }
@@ -261,6 +267,9 @@ import UniformTypeIdentifiers
     }
     let pixelWidth = (props?[kCGImagePropertyPixelWidth] as? Int) ?? 0
     let pixelHeight = (props?[kCGImagePropertyPixelHeight] as? Int) ?? 0
+    if pixelWidth == 0 || pixelHeight == 0 {
+      NSLog("[ReactNativeMediaPicker] warning: could not read image dimensions from source")
+    }
 
     var asset: [String: Any] = [
       "uri": fileURL.absoluteString,
@@ -287,8 +296,15 @@ import UniformTypeIdentifiers
       outMime = "image/png"
       encoded = resized.pngData()
     case "image/heic":
-      outMime = "image/heic"
-      encoded = heicData(from: resized, quality: quality)
+      if let heic = heicData(from: resized, quality: quality) {
+        outMime = "image/heic"
+        encoded = heic
+      } else {
+        // HEIC encoder unavailable (Simulator, pre-A10 devices) — fall back to
+        // JPEG, mirroring Android. ext(forMime:) keeps file/type consistent.
+        outMime = "image/jpeg"
+        encoded = resized.jpegData(compressionQuality: quality)
+      }
     default: // jpeg, and webp (no iOS encoder) → jpeg fallback
       outMime = "image/jpeg"
       encoded = resized.jpegData(compressionQuality: quality)
