@@ -342,7 +342,9 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
     val resolver = reactContext.contentResolver
     val srcMime = MediaFormat.normalizeMime(resolver.getType(uri))
 
-    val animated = srcMime == "image/gif" ||
+    // GIF and animated WebP can't be re-encoded frame-by-frame, so they always
+    // pass through untouched (resize is intentionally ignored for them).
+    val usePassthroughFormat = srcMime == "image/gif" ||
       (srcMime == "image/webp" && isAnimatedWebpUri(uri))
 
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -353,28 +355,44 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
       (maxWidth > 0 && bounds.outWidth > maxWidth) ||
       (maxHeight > 0 && bounds.outHeight > maxHeight)
 
-    return if (animated || !resizeRequested || !exceedsBounds) {
-      passthrough(uri, srcMime, includeBase64)
+    return if (usePassthroughFormat || !resizeRequested || !exceedsBounds) {
+      passthrough(uri, srcMime, bounds.outWidth, bounds.outHeight, includeBase64)
     } else {
-      transform(uri, srcMime, maxWidth, maxHeight, quality, includeBase64)
+      transform(uri, srcMime, bounds, maxWidth, maxHeight, quality, includeBase64)
     }
   }
 
   /** Copies the original encoded bytes verbatim, preserving format and EXIF. */
-  private fun passthrough(uri: Uri, mime: String, includeBase64: Boolean): WritableMap {
+  private fun passthrough(
+    uri: Uri,
+    mime: String,
+    srcWidth: Int,
+    srcHeight: Int,
+    includeBase64: Boolean,
+  ): WritableMap {
     val resolver = reactContext.contentResolver
     val ext = MediaFormat.extensionForMime(mime)
     val outFile = File.createTempFile("media_picker_", ".$ext", reactContext.cacheDir)
+
+    // Stream-copy by default (low memory); only hold bytes in memory when base64
+    // is requested, to avoid reading the file twice.
+    var base64: String? = null
     resolver.openInputStream(uri).use { input ->
       input ?: throw IllegalStateException("Failed to open image stream")
-      FileOutputStream(outFile).use { output -> input.copyTo(output) }
+      if (includeBase64) {
+        val bytes = input.readBytes()
+        outFile.writeBytes(bytes)
+        base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+      } else {
+        FileOutputStream(outFile).use { output -> input.copyTo(output) }
+      }
     }
 
-    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    resolver.openInputStream(uri).use { BitmapFactory.decodeStream(it, null, bounds) }
+    // GIF carries no EXIF, so isExifAxisSwapped returns false for it; the others
+    // honor the orientation tag so reported dimensions match how it's displayed.
     val swap = isExifAxisSwapped(uri)
-    val width = if (swap) bounds.outHeight else bounds.outWidth
-    val height = if (swap) bounds.outWidth else bounds.outHeight
+    val width = if (swap) srcHeight else srcWidth
+    val height = if (swap) srcWidth else srcHeight
 
     return Arguments.createMap().apply {
       putString("uri", Uri.fromFile(outFile).toString())
@@ -383,8 +401,9 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
       putDouble("fileSize", outFile.length().toDouble())
       putInt("width", width)
       putInt("height", height)
-      if (includeBase64) {
-        putString("base64", Base64.encodeToString(outFile.readBytes(), Base64.NO_WRAP))
+      val b64 = base64
+      if (b64 != null) {
+        putString("base64", b64)
       }
     }
   }
@@ -393,6 +412,7 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
   private fun transform(
     uri: Uri,
     srcMime: String,
+    bounds: BitmapFactory.Options,
     maxWidth: Int,
     maxHeight: Int,
     quality: Int,
@@ -401,9 +421,6 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
     val resolver = reactContext.contentResolver
     val reqW = if (maxWidth > 0) maxWidth else Int.MAX_VALUE
     val reqH = if (maxHeight > 0) maxHeight else Int.MAX_VALUE
-
-    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    resolver.openInputStream(uri).use { BitmapFactory.decodeStream(it, null, bounds) }
 
     val decodeOpts = BitmapFactory.Options().apply {
       inSampleSize = calculateInSampleSize(bounds.outWidth, bounds.outHeight, reqW, reqH)
@@ -461,8 +478,13 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
       reactContext.contentResolver.openInputStream(uri).use { stream ->
         stream ?: return false
         val header = ByteArray(21)
-        val read = stream.read(header)
-        read >= 21 && MediaFormat.isAnimatedWebp(header)
+        var total = 0
+        while (total < header.size) {
+          val n = stream.read(header, total, header.size - total)
+          if (n == -1) break
+          total += n
+        }
+        total >= 21 && MediaFormat.isAnimatedWebp(header)
       }
     } catch (e: Exception) {
       false
