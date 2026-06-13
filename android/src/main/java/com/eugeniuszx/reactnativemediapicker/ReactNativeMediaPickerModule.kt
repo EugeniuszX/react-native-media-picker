@@ -281,6 +281,9 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
     val reqQuality = quality
     val reqIncludeBase64 = includeBase64
 
+    // NOTE: a single failed URI fails the whole batch here (all-or-nothing),
+    // whereas iOS drops only the failed item. Kept as-is for now; revisit if
+    // partial-success parity is needed.
     moduleScope.launch {
       try {
         val assets: WritableArray = Arguments.createArray()
@@ -391,8 +394,8 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
     // GIF carries no EXIF, so isExifAxisSwapped returns false for it; the others
     // honor the orientation tag so reported dimensions match how it's displayed.
     val swap = isExifAxisSwapped(uri)
-    val width = if (swap) srcHeight else srcWidth
-    val height = if (swap) srcWidth else srcHeight
+    val width = (if (swap) srcHeight else srcWidth).coerceAtLeast(0)
+    val height = (if (swap) srcWidth else srcHeight).coerceAtLeast(0)
 
     return Arguments.createMap().apply {
       putString("uri", Uri.fromFile(outFile).toString())

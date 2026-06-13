@@ -44,7 +44,7 @@ if (!result.didCancel && result.assets) {
 | `selectionLimit` | `number` | `1` | `0` = unlimited |
 | `maxWidth` | `number` | `0` | `0` = no resize |
 | `maxHeight` | `number` | `0` | `0` = no resize |
-| `quality` | `number` | `1` | JPEG quality 0..1 |
+| `quality` | `number` | `1` | Re-encode quality 0..1 (JPEG/WebP; ignored for lossless PNG) |
 | `includeBase64` | `boolean` | `false` | adds `base64` to each asset |
 
 ## `Asset`
@@ -91,7 +91,7 @@ const result = await launchCamera({
 | `cameraType` | `'back' \| 'front'` | `'back'` | Honored on iOS; **best-effort on Android** (the system camera app may ignore it) |
 | `maxWidth` | `number` | `0` | `0` = no resize |
 | `maxHeight` | `number` | `0` | `0` = no resize |
-| `quality` | `number` | `1` | JPEG quality 0..1 |
+| `quality` | `number` | `1` | Re-encode quality 0..1 (JPEG/WebP; ignored for lossless PNG) |
 | `includeBase64` | `boolean` | `false` | adds `base64` to the captured asset |
 
 ### Camera permissions

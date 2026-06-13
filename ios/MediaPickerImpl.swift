@@ -233,9 +233,14 @@ import UniformTypeIdentifiers
       return writePassthrough(data, mime: srcMime)
     }
 
+    // No resize bound → return original bytes without decoding to a bitmap.
+    guard maxWidth > 0 || maxHeight > 0 else {
+      return writePassthrough(data, mime: srcMime)
+    }
+
     guard let image = UIImage(data: data) else { return nil }
-    let needsResize = (maxWidth > 0 || maxHeight > 0) &&
-      (image.size.width > effectiveMaxWidth(image) || image.size.height > effectiveMaxHeight(image))
+    let needsResize =
+      image.size.width > effectiveMaxWidth(image) || image.size.height > effectiveMaxHeight(image)
 
     if !needsResize {
       return writePassthrough(data, mime: srcMime)
@@ -270,14 +275,21 @@ import UniformTypeIdentifiers
     if pixelWidth == 0 || pixelHeight == 0 {
       NSLog("[ReactNativeMediaPicker] warning: could not read image dimensions from source")
     }
+    // EXIF orientations 5–8 are the 90°/270° rotations that transpose the stored
+    // buffer's axes; swap so reported dimensions match how the image displays
+    // (mirrors the Android passthrough path).
+    let orientation = (props?[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1
+    let axisSwapped = (5...8).contains(orientation)
+    let width = axisSwapped ? pixelHeight : pixelWidth
+    let height = axisSwapped ? pixelWidth : pixelHeight
 
     var asset: [String: Any] = [
       "uri": fileURL.absoluteString,
       "type": mime,
       "fileName": fileName,
       "fileSize": data.count,
-      "width": pixelWidth,
-      "height": pixelHeight,
+      "width": width,
+      "height": height,
     ]
     if includeBase64 {
       asset["base64"] = data.base64EncodedString()
