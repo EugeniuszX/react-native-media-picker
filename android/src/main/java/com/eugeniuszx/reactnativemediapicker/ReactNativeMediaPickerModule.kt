@@ -327,12 +327,72 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
     }
 
   /**
-   * Decodes, rotates, scales and JPEG-compresses [uri] into a temp file in cacheDir.
-   * The returned file lives in the app cache; the caller owns its lifecycle (the OS
-   * reclaims cacheDir under storage pressure).
+   * Decodes [uri], deciding between a lossless passthrough (animated images, or
+   * when no resize is needed) and a transform (decode → EXIF-rotate → scale →
+   * re-encode in the source format, with HEIC/GIF falling back to JPEG).
+   * The returned file lives in cacheDir; the caller owns its lifecycle.
    */
   private fun processImage(
     uri: Uri,
+    maxWidth: Int,
+    maxHeight: Int,
+    quality: Int,
+    includeBase64: Boolean,
+  ): WritableMap {
+    val resolver = reactContext.contentResolver
+    val srcMime = MediaFormat.normalizeMime(resolver.getType(uri))
+
+    val animated = srcMime == "image/gif" ||
+      (srcMime == "image/webp" && isAnimatedWebpUri(uri))
+
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    resolver.openInputStream(uri).use { BitmapFactory.decodeStream(it, null, bounds) }
+
+    val resizeRequested = maxWidth > 0 || maxHeight > 0
+    val exceedsBounds =
+      (maxWidth > 0 && bounds.outWidth > maxWidth) ||
+      (maxHeight > 0 && bounds.outHeight > maxHeight)
+
+    return if (animated || !resizeRequested || !exceedsBounds) {
+      passthrough(uri, srcMime, includeBase64)
+    } else {
+      transform(uri, srcMime, maxWidth, maxHeight, quality, includeBase64)
+    }
+  }
+
+  /** Copies the original encoded bytes verbatim, preserving format and EXIF. */
+  private fun passthrough(uri: Uri, mime: String, includeBase64: Boolean): WritableMap {
+    val resolver = reactContext.contentResolver
+    val ext = MediaFormat.extensionForMime(mime)
+    val outFile = File.createTempFile("media_picker_", ".$ext", reactContext.cacheDir)
+    resolver.openInputStream(uri).use { input ->
+      input ?: throw IllegalStateException("Failed to open image stream")
+      FileOutputStream(outFile).use { output -> input.copyTo(output) }
+    }
+
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    resolver.openInputStream(uri).use { BitmapFactory.decodeStream(it, null, bounds) }
+    val swap = isExifAxisSwapped(uri)
+    val width = if (swap) bounds.outHeight else bounds.outWidth
+    val height = if (swap) bounds.outWidth else bounds.outHeight
+
+    return Arguments.createMap().apply {
+      putString("uri", Uri.fromFile(outFile).toString())
+      putString("type", mime)
+      putString("fileName", outFile.name)
+      putDouble("fileSize", outFile.length().toDouble())
+      putInt("width", width)
+      putInt("height", height)
+      if (includeBase64) {
+        putString("base64", Base64.encodeToString(outFile.readBytes(), Base64.NO_WRAP))
+      }
+    }
+  }
+
+  /** Decodes, rotates, scales and re-encodes in the source format (HEIC/GIF → JPEG). */
+  private fun transform(
+    uri: Uri,
+    srcMime: String,
     maxWidth: Int,
     maxHeight: Int,
     quality: Int,
@@ -355,12 +415,21 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
     bitmap = applyExifRotation(uri, bitmap)
     bitmap = scaleToFit(bitmap, reqW, reqH)
 
-    val baos = ByteArrayOutputStream()
-    bitmap.compress(Bitmap.CompressFormat.JPEG, quality, baos)
-    val jpegBytes = baos.toByteArray()
+    val outFormat = MediaFormat.reencodeFormat(srcMime)
+    val compressFormat = when (outFormat) {
+      MediaFormat.OutputFormat.PNG -> Bitmap.CompressFormat.PNG
+      MediaFormat.OutputFormat.WEBP -> webpCompressFormat()
+      MediaFormat.OutputFormat.JPEG -> Bitmap.CompressFormat.JPEG
+    }
+    val outMime = MediaFormat.reencodeMime(outFormat)
+    val ext = MediaFormat.extensionForMime(outMime)
 
-    val outFile = File.createTempFile("media_picker_", ".jpg", reactContext.cacheDir)
-    FileOutputStream(outFile).use { it.write(jpegBytes) }
+    val baos = ByteArrayOutputStream()
+    bitmap.compress(compressFormat, quality, baos)
+    val bytes = baos.toByteArray()
+
+    val outFile = File.createTempFile("media_picker_", ".$ext", reactContext.cacheDir)
+    FileOutputStream(outFile).use { it.write(bytes) }
 
     val width = bitmap.width
     val height = bitmap.height
@@ -368,15 +437,49 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
 
     return Arguments.createMap().apply {
       putString("uri", Uri.fromFile(outFile).toString())
-      putString("type", "image/jpeg")
+      putString("type", outMime)
       putString("fileName", outFile.name)
-      putDouble("fileSize", jpegBytes.size.toDouble())
+      putDouble("fileSize", bytes.size.toDouble())
       putInt("width", width)
       putInt("height", height)
       if (includeBase64) {
-        putString("base64", Base64.encodeToString(jpegBytes, Base64.NO_WRAP))
+        putString("base64", Base64.encodeToString(bytes, Base64.NO_WRAP))
       }
     }
+  }
+
+  @Suppress("DEPRECATION")
+  private fun webpCompressFormat(): Bitmap.CompressFormat =
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+      Bitmap.CompressFormat.WEBP_LOSSY
+    } else {
+      Bitmap.CompressFormat.WEBP
+    }
+
+  private fun isAnimatedWebpUri(uri: Uri): Boolean =
+    try {
+      reactContext.contentResolver.openInputStream(uri).use { stream ->
+        stream ?: return false
+        val header = ByteArray(21)
+        val read = stream.read(header)
+        read >= 21 && MediaFormat.isAnimatedWebp(header)
+      }
+    } catch (e: Exception) {
+      false
+    }
+
+  private fun isExifAxisSwapped(uri: Uri): Boolean {
+    val orientation = reactContext.contentResolver.openInputStream(uri).use { stream ->
+      stream ?: return false
+      ExifInterface(stream).getAttributeInt(
+        ExifInterface.TAG_ORIENTATION,
+        ExifInterface.ORIENTATION_NORMAL,
+      )
+    }
+    return orientation == ExifInterface.ORIENTATION_ROTATE_90 ||
+      orientation == ExifInterface.ORIENTATION_ROTATE_270 ||
+      orientation == ExifInterface.ORIENTATION_TRANSPOSE ||
+      orientation == ExifInterface.ORIENTATION_TRANSVERSE
   }
 
   private fun calculateInSampleSize(srcW: Int, srcH: Int, reqW: Int, reqH: Int): Int {
