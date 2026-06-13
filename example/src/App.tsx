@@ -86,7 +86,7 @@ export default function App() {
         {assets.map((a) => (
           <View key={a.uri} style={styles.card}>
             <Image source={{ uri: a.uri }} style={styles.image} />
-            <Text>{`${a.width}x${a.height} • ${a.fileSize ?? '?'}B`}</Text>
+            <Text>{`${a.type} • ${a.width}x${a.height} • ${a.fileSize ?? '?'}B`}</Text>
             <Text numberOfLines={1}>{a.uri}</Text>
             <Text>{`base64: ${a.base64 ? `${a.base64.length} chars` : 'none'}`}</Text>
           </View>
