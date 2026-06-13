@@ -63,4 +63,25 @@ class MediaFormatTest {
     assertFalse(MediaFormat.isAnimatedWebp(ByteArray(4)))
     assertFalse(MediaFormat.isAnimatedWebp(ByteArray(0)))
   }
+
+  @Test fun twentyByteHeaderIsNotAnimated() {
+    // One byte short of the 21-byte minimum the flags byte lives at.
+    assertFalse(MediaFormat.isAnimatedWebp(ByteArray(20)))
+  }
+
+  @Test fun vp8xWithClearAnimationFlagIsNotAnimated() {
+    // Valid RIFF/WEBP/VP8X header but the animation bit (0x02) is not set.
+    val header = ByteArray(21)
+    "RIFF".forEachIndexed { i, c -> header[i] = c.code.toByte() }
+    "WEBP".forEachIndexed { i, c -> header[8 + i] = c.code.toByte() }
+    "VP8X".forEachIndexed { i, c -> header[12 + i] = c.code.toByte() }
+    header[20] = 0x00
+    assertFalse(MediaFormat.isAnimatedWebp(header))
+  }
+
+  @Test fun gifFallsBackToJpegOnReencode() {
+    // GIF is never resized, but if it ever reaches the transform path it must
+    // fall back to a JPEG re-encode (no GIF encoder is used).
+    assertEquals(MediaFormat.OutputFormat.JPEG, MediaFormat.reencodeFormat("image/gif"))
+  }
 }

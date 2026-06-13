@@ -19,6 +19,7 @@ internal object MediaFormat {
     else -> "image/jpeg"
   }
 
+  /** Expects a mime already normalized by [normalizeMime]. */
   fun extensionForMime(mime: String): String = when (mime) {
     "image/png" -> "png"
     "image/webp" -> "webp"
@@ -30,6 +31,7 @@ internal object MediaFormat {
   /**
    * Encoder to use when a transform (resize) forces a re-encode. HEIC has no
    * Android encoder, GIF is never resized, so both fall back to JPEG.
+   * Expects a mime already normalized by [normalizeMime].
    */
   fun reencodeFormat(mime: String): OutputFormat = when (mime) {
     "image/png" -> OutputFormat.PNG
@@ -37,6 +39,7 @@ internal object MediaFormat {
     else -> OutputFormat.JPEG
   }
 
+  /** Inverse of [reencodeFormat]: the mime actually emitted for each output format. */
   fun reencodeMime(format: OutputFormat): String = when (format) {
     OutputFormat.PNG -> "image/png"
     OutputFormat.WEBP -> "image/webp"
@@ -59,6 +62,6 @@ internal object MediaFormat {
     if (header[12].toInt() != 'V'.code || header[13].toInt() != 'P'.code ||
       header[14].toInt() != '8'.code || header[15].toInt() != 'X'.code
     ) return false
-    return (header[20].toInt() and 0x02) != 0
+    return (header[20].toInt() and 0xFF and 0x02) != 0
   }
 }
