@@ -31,12 +31,16 @@ struct DecodePlan: Equatable {
     let displayWidth = orientation.swapsAxes ? pixelHeight : pixelWidth
     let displayHeight = orientation.swapsAxes ? pixelWidth : pixelHeight
 
+    // Sizes are clamped to 0 because a failed metadata read reports a negative
+    // dimension on both platforms (Android's BitmapFactory.Options.outWidth is
+    // -1), and a negative width must never reach JS. Kept identical to the
+    // Kotlin core.
     func passthrough() -> DecodePlan {
       DecodePlan(
-        displayWidth: displayWidth,
-        displayHeight: displayHeight,
-        targetWidth: displayWidth,
-        targetHeight: displayHeight,
+        displayWidth: max(0, displayWidth),
+        displayHeight: max(0, displayHeight),
+        targetWidth: max(0, displayWidth),
+        targetHeight: max(0, displayHeight),
         sampleSize: 1,
         needsTransform: false
       )

@@ -133,6 +133,11 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
     }
   }
 
+  // TODO(task-9): replaced by the TempFileStore-backed implementation.
+  override fun cleanTempFiles(promise: Promise) {
+    promise.resolve(null)
+  }
+
   private fun isCameraPermissionDeclared(): Boolean =
     try {
       val info = reactContext.packageManager.getPackageInfo(

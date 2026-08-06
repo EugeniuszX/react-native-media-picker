@@ -141,4 +141,15 @@ final class DecodePlanTests: XCTestCase {
     XCTAssertEqual(p.displayHeight, 0)
     XCTAssertEqual(p.sampleSize, 1)
   }
+
+  /// A failed bounds-only decode reports -1, not 0. A negative width must never
+  /// reach JS, and both cores must clamp it the same way.
+  func testNegativeDimensionsAreClampedToZero() {
+    let p = plan(-1, -1, maxWidth: 640, maxHeight: 640)
+    XCTAssertFalse(p.needsTransform)
+    XCTAssertEqual(p.displayWidth, 0)
+    XCTAssertEqual(p.displayHeight, 0)
+    XCTAssertEqual(p.targetWidth, 0)
+    XCTAssertEqual(p.targetHeight, 0)
+  }
 }
