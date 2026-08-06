@@ -6,7 +6,7 @@
 #import <ReactNativeMediaPicker/ReactNativeMediaPicker-Swift.h>
 #endif
 
-static NSDictionary *RNMediaPickerBuildResponse(NSArray<NSDictionary *> *assets,
+static NSDictionary *RNMediaPickerBuildResponse(NSArray<NSDictionary<NSString *, id> *> *assets,
                                                 BOOL didCancel,
                                                 NSString *errorCode,
                                                 NSString *errorMessage) {
@@ -25,13 +25,13 @@ static NSDictionary *RNMediaPickerBuildResponse(NSArray<NSDictionary *> *assets,
 }
 
 @implementation ReactNativeMediaPicker {
-    MediaPickerImpl *_impl;
+    PickerCoordinator *_coordinator;
 }
 
 - (instancetype)init
 {
     if (self = [super init]) {
-        _impl = [MediaPickerImpl new];
+        _coordinator = [PickerCoordinator new];
     }
     return self;
 }
@@ -40,21 +40,15 @@ static NSDictionary *RNMediaPickerBuildResponse(NSArray<NSDictionary *> *assets,
                    resolve:(RCTPromiseResolveBlock)resolve
                     reject:(RCTPromiseRejectBlock)reject
 {
-    NSInteger selectionLimit = (NSInteger)options.selectionLimit();
-    double maxWidth = options.maxWidth();
-    double maxHeight = options.maxHeight();
-    double quality = options.quality();
-    BOOL includeBase64 = options.includeBase64();
-
-    [_impl launchImageLibrary:selectionLimit
-                     maxWidth:maxWidth
-                    maxHeight:maxHeight
-                      quality:quality
-                includeBase64:includeBase64
-                   completion:^(NSArray<NSDictionary *> *assets,
-                                BOOL didCancel,
-                                NSString *errorCode,
-                                NSString *errorMessage) {
+    [_coordinator launchImageLibraryWithSelectionLimit:(NSInteger)options.selectionLimit()
+                                              maxWidth:(NSInteger)options.maxWidth()
+                                             maxHeight:(NSInteger)options.maxHeight()
+                                               quality:options.quality()
+                                         includeBase64:options.includeBase64()
+                                            completion:^(NSArray<NSDictionary<NSString *, id> *> *assets,
+                                                         BOOL didCancel,
+                                                         NSString *errorCode,
+                                                         NSString *errorMessage) {
         resolve(RNMediaPickerBuildResponse(assets, didCancel, errorCode, errorMessage));
     }];
 }
@@ -63,23 +57,24 @@ static NSDictionary *RNMediaPickerBuildResponse(NSArray<NSDictionary *> *assets,
              resolve:(RCTPromiseResolveBlock)resolve
               reject:(RCTPromiseRejectBlock)reject
 {
-    NSString *cameraType = options.cameraType();
-    double maxWidth = options.maxWidth();
-    double maxHeight = options.maxHeight();
-    double quality = options.quality();
-    BOOL includeBase64 = options.includeBase64();
-
-    [_impl launchCamera:cameraType
-               maxWidth:maxWidth
-              maxHeight:maxHeight
-                quality:quality
-          includeBase64:includeBase64
-             completion:^(NSArray<NSDictionary *> *assets,
-                          BOOL didCancel,
-                          NSString *errorCode,
-                          NSString *errorMessage) {
+    [_coordinator launchCameraWithCameraType:options.cameraType()
+                                    maxWidth:(NSInteger)options.maxWidth()
+                                   maxHeight:(NSInteger)options.maxHeight()
+                                     quality:options.quality()
+                               includeBase64:options.includeBase64()
+                                  completion:^(NSArray<NSDictionary<NSString *, id> *> *assets,
+                                               BOOL didCancel,
+                                               NSString *errorCode,
+                                               NSString *errorMessage) {
         resolve(RNMediaPickerBuildResponse(assets, didCancel, errorCode, errorMessage));
     }];
+}
+
+- (void)cleanTempFiles:(RCTPromiseResolveBlock)resolve
+                reject:(RCTPromiseRejectBlock)reject
+{
+    [_coordinator cleanTempFiles];
+    resolve(nil);
 }
 
 - (std::shared_ptr<facebook::react::TurboModule>)getTurboModule:
