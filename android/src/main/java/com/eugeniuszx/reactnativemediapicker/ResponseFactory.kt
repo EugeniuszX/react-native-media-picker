@@ -3,11 +3,6 @@ package com.eugeniuszx.reactnativemediapicker
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.WritableMap
 
-/**
- * The only place asset and response keys are spelled out. Must stay in sync
- * with the `Asset` / `PickerResponse` types in
- * `src/NativeReactNativeMediaPicker.ts`.
- */
 internal object ResponseFactory {
   fun success(assets: List<AssetPayload>): WritableMap {
     val array = Arguments.createArray()

@@ -1,8 +1,6 @@
 import Foundation
 import UniformTypeIdentifiers
 
-/// The canonical image formats the picker recognizes. `rawValue` is the mime
-/// type reported to JS, so it is also the single source of truth for `Asset.type`.
 enum ImageFormat: String {
   case jpeg = "image/jpeg"
   case png = "image/png"
@@ -22,16 +20,10 @@ enum ImageFormat: String {
     }
   }
 
-  /// Formats that may hold more than one frame. We have no frame-by-frame
-  /// encoder, so these are never re-encoded — they pass through untouched.
   var isPotentiallyAnimated: Bool {
     self == .gif || self == .webp
   }
 
-  /// The format actually emitted when a resize forces a re-encode. iOS ships no
-  /// WebP encoder, and GIF would lose its frames, so both degrade to JPEG.
-  /// HEIC stays HEIC here; `ImageProcessor` falls back to JPEG at runtime when
-  /// the HEIC encoder is unavailable (Simulator, pre-A10 devices).
   var reencodeFormat: ImageFormat {
     switch self {
     case .png: return .png
@@ -50,8 +42,6 @@ enum ImageFormat: String {
     }
   }
 
-  /// Animated-WebP detection from the RIFF/VP8X header: animation is bit 0x02 of
-  /// the flags byte at offset 20. `header` needs at least the first 21 bytes.
   static func isAnimatedWebP(header: Data) -> Bool {
     guard header.count >= 21 else { return false }
     let bytes = [UInt8](header.prefix(21))

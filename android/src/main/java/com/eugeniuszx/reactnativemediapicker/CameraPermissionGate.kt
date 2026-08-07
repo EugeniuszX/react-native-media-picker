@@ -8,16 +8,7 @@ import androidx.core.content.ContextCompat
 import com.facebook.react.modules.core.PermissionAwareActivity
 import com.facebook.react.modules.core.PermissionListener
 
-/**
- * Requests CAMERA at runtime, but only if the host app declares it. An app that
- * does not declare CAMERA can still launch the system camera app, which handles
- * its own permissions.
- */
 internal class CameraPermissionGate(private val context: Context) {
-  /**
-   * Calls [onGranted] when the camera may be opened, or [onDenied] with a
-   * reason. Exactly one of the two runs.
-   */
   fun ensure(activity: Activity, onGranted: () -> Unit, onDenied: (PickerError, String) -> Unit) {
     if (!isDeclared() || isGranted()) {
       onGranted()

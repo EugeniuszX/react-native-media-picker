@@ -2,26 +2,15 @@ import PhotosUI
 import UIKit
 import UniformTypeIdentifiers
 
-/// Presents `PHPickerViewController` and turns the selection into assets.
-/// One instance per pick; it retains itself as the picker's delegate until the
-/// selection is resolved.
 final class LibraryPicker: NSObject, PHPickerViewControllerDelegate {
-  /// Items loaded in parallel. Each in-flight item holds original bytes plus,
-  /// on the transform path, a decoded bitmap and the encoded output — so this
-  /// is the knob that bounds peak memory on large selections.
   static let maxConcurrentItemLoads = 4
 
-  /// Liveness backstop, not an expected duration: the dismissal completion is
-  /// observed to fire well inside this, and nothing waits the full interval in
-  /// normal operation. It exists so that a `dismiss(animated:completion:)` that
-  /// never calls back — an undocumented UIKit property we cannot rely on —
-  /// degrades to a late resolution instead of a promise that strands the
-  /// single-flight session for the lifetime of the process.
   static let dismissalTimeout: TimeInterval = 3
 
   private let options: LibraryOptions
   private let processor: ImageProcessor
   private let finish: ([AssetPayload]?, Bool, PickerError?, String?) -> Void
+  /// Kept alive until completion — PHPickerViewController holds its delegate weakly.
   private var selfReference: LibraryPicker?
 
   init(
@@ -38,11 +27,8 @@ final class LibraryPicker: NSObject, PHPickerViewControllerDelegate {
   func present() {
     var configuration = PHPickerConfiguration()
     configuration.filter = .images
-    configuration.selectionLimit = options.selectionLimit  // 0 = unlimited
+    configuration.selectionLimit = options.selectionLimit
 
-    // Nothing else owns this object: the coordinator drops its reference as soon
-    // as `present` returns, and `PHPickerViewController` holds its delegate
-    // weakly. `complete` is the only place the reference is given up.
     selfReference = self
 
     DispatchQueue.main.async { [self] in
@@ -50,9 +36,6 @@ final class LibraryPicker: NSObject, PHPickerViewControllerDelegate {
         complete(nil, false, .others, "No view controller to present from")
         return
       }
-      // The locator only ever hands back a controller whose presentation slot is
-      // free or occupied by something mid-dismissal. In the latter case UIKit
-      // would silently refuse to present, so fail loudly instead of wedging.
       guard presenter.presentedViewController == nil else {
         complete(nil, false, .others, "A view controller is already being presented")
         return
@@ -64,16 +47,11 @@ final class LibraryPicker: NSObject, PHPickerViewControllerDelegate {
   }
 
   func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-    // The promise must not resolve until the picker is fully off screen: JS
-    // routinely chains another pick in .then(), and UIKit silently refuses to
-    // present while a dismissal is still animating.
     let dismissed = DispatchGroup()
     dismissed.enter()
     picker.dismiss(animated: true) { dismissed.leave() }
 
     guard !results.isEmpty else {
-      // Bounded: a missing dismissal callback must degrade to a late resolution,
-      // never to a promise that strands the single-flight session forever.
       DispatchQueue.global(qos: .userInitiated).async { [self] in
         _ = dismissed.wait(timeout: .now() + Self.dismissalTimeout)
         complete(nil, true, nil, nil)
@@ -81,14 +59,11 @@ final class LibraryPicker: NSObject, PHPickerViewControllerDelegate {
       return
     }
 
-    // Pre-sized, index-addressed slots preserve the user's selection order even
-    // though load completions arrive out of order.
     var slots = [AssetPayload?](repeating: nil, count: results.count)
     let lock = NSLock()
     let group = DispatchGroup()
     let semaphore = DispatchSemaphore(value: Self.maxConcurrentItemLoads)
 
-    // The loop blocks on the semaphore, so it must not run on the main queue.
     DispatchQueue.global(qos: .userInitiated).async { [self] in
       for (index, result) in results.enumerated() {
         let provider = result.itemProvider
@@ -131,14 +106,9 @@ final class LibraryPicker: NSObject, PHPickerViewControllerDelegate {
       }
 
       group.wait()
-      // Safe to block here: this is a global queue, and the dismissal
-      // completion is delivered on main, which nothing in this path holds.
-      // Processing and the animation overlap rather than serialize. Bounded so
-      // a missing dismissal callback cannot strand the session forever.
       _ = dismissed.wait(timeout: .now() + Self.dismissalTimeout)
       let assets = slots.compactMap { $0 }
       if assets.isEmpty {
-        // The selection was non-empty but nothing survived loading/processing.
         complete(nil, false, .others, "Failed to load the selected image(s).")
       } else {
         complete(assets, false, nil, nil)

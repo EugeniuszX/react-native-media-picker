@@ -1,8 +1,6 @@
 import Foundation
 import UIKit
 
-/// The object the Objective-C++ TurboModule talks to. It owns the single-flight
-/// session and the temp-file store; everything else is built per request.
 @objc public final class PickerCoordinator: NSObject {
   private typealias Completion = ([[String: Any]]?, Bool, String?, String?) -> Void
 
@@ -15,8 +13,6 @@ import UIKit
     tempFiles = store
     processor = ImageProcessor(tempFiles: store)
     super.init()
-    // Sweep leftovers from previous runs. Anything recent is left alone in case
-    // JS is still holding a URI from a reload-surviving pick.
     DispatchQueue.global(qos: .utility).async {
       store.removeFiles(olderThan: TempFileStore.autoSweepAge)
     }
@@ -82,7 +78,6 @@ import UIKit
     }
   }
 
-  /// Delivers the result to JS at most once, whichever queue we are on.
   private func finish(
     _ assets: [AssetPayload]?,
     _ didCancel: Bool,

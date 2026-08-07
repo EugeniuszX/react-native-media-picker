@@ -1,8 +1,5 @@
 import Foundation
 
-/// One picked item. `dictionary` is the only place asset keys are spelled out —
-/// it must stay in sync with the `Asset` type in
-/// `src/NativeReactNativeMediaPicker.ts`.
 struct AssetPayload: Equatable {
   let uri: String
   let mime: String

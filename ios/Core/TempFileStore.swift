@@ -1,11 +1,7 @@
 import Foundation
 
-/// Owns the picker's on-disk scratch space. Everything lives in one dedicated
-/// subdirectory so it can be swept without touching anything else in tmp.
 struct TempFileStore {
   static let directoryName = "rn-media-picker"
-  /// Files older than this are removed when the module initializes. Long enough
-  /// that a URI handed to JS stays valid for any realistic session.
   static let autoSweepAge: TimeInterval = 24 * 60 * 60
 
   private let root: URL
@@ -24,13 +20,11 @@ struct TempFileStore {
     return root.appendingPathComponent("media_picker_\(UUID().uuidString).\(fileExtension)")
   }
 
-  /// Deletes every file the picker has produced. Returns how many were removed.
   @discardableResult
   func removeAll() -> Int {
     remove { _ in true }
   }
 
-  /// Deletes files last modified more than `age` seconds before `now`.
   @discardableResult
   func removeFiles(olderThan age: TimeInterval, now: Date = Date()) -> Int {
     remove { url in

@@ -29,11 +29,6 @@ class TempFileStoreTest {
     assertEquals(0, store.removeAll())
   }
 
-  /**
-   * removeAll empties the directory but must not delete the directory itself —
-   * one of the semantics bound to ios/Core/TempFileStore.swift. Task 9 sweeps
-   * this directory at module init and then writes into it.
-   */
   @Test
   fun `removeAll keeps the directory itself`() {
     val root = folder.newFolder("cache").resolve(TempFileStore.DIRECTORY_NAME)
@@ -65,17 +60,10 @@ class TempFileStoreTest {
     assertTrue(recent.exists())
   }
 
-  /**
-   * Mirrors the iOS store: an unreadable timestamp means "keep". File.lastModified
-   * reports 0 for that case, which a bare subtraction would misread as ancient.
-   */
   @Test
   fun `age based sweep keeps files whose timestamp cannot be read`() {
     val store = store()
     val file = store.createFile("jpg").apply { writeBytes(byteArrayOf(1)) }
-    // Asserted: if the filesystem refuses the value, lastModified stays at ~now,
-    // removeFilesOlderThan returns 0 for the wrong reason, and this parity test
-    // becomes a permanent false green with no signal.
     assertTrue(file.setLastModified(0L))
 
     assertEquals(0, store.removeFilesOlderThan(TempFileStore.AUTO_SWEEP_AGE_MILLIS, 1_000_000_000_000L))

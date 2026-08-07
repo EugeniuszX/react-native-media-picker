@@ -1,13 +1,9 @@
 import UIKit
 
-/// Finds the view controller a picker should be presented from. Must be called
-/// on the main thread — `UIApplication.shared` is main-actor state.
 enum ViewControllerLocator {
   static func topViewController() -> UIViewController? {
     guard let root = keyWindow()?.rootViewController else { return nil }
     var top = root
-    // Skip controllers that are on their way out; presenting from one of those
-    // silently does nothing.
     while let presented = top.presentedViewController, !presented.isBeingDismissed {
       top = presented
     }
@@ -24,7 +20,6 @@ enum ViewControllerLocator {
         return key
       }
     }
-    // No key window yet (e.g. very early in launch): any visible window will do.
     return ordered.first?.windows.first { !$0.isHidden }
   }
 

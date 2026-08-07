@@ -9,28 +9,20 @@ import NativeMediaPicker, {
 export type { Asset, ErrorCode, PickerResponse };
 
 export interface LibraryOptions {
-  /** Max number of items. 1 = single (default), 0 = unlimited. */
   selectionLimit?: number;
-  /** Resize bound in px. 0 = no resize. */
   maxWidth?: number;
   maxHeight?: number;
-  /** JPEG/WebP quality 0..1. Default 1. Ignored for PNG and animated images. */
   quality?: number;
-  /** Also return base64 of each asset. Default false. */
   includeBase64?: boolean;
 }
 
 export type CameraType = 'back' | 'front';
 
 export interface CameraOptions {
-  /** Which camera to open. Honored on iOS; best-effort on Android. Default 'back'. */
   cameraType?: CameraType;
-  /** Resize bound in px. 0 = no resize. */
   maxWidth?: number;
   maxHeight?: number;
-  /** JPEG quality 0..1. Default 1. */
   quality?: number;
-  /** Also return base64 of the captured asset. Default false. */
   includeBase64?: boolean;
 }
 
@@ -41,11 +33,6 @@ const clamp = (value: number, min: number, max: number): number =>
 
 const clampMin0 = (value: number): number => Math.max(value, 0);
 
-/**
- * @internal
- * Exported only for testing purposes. This function is not part of the public
- * API and may change between versions without a semver bump.
- */
 export const normalizeLibraryOptions = (
   options: LibraryOptions
 ): NativeLibraryOptions => ({
@@ -61,7 +48,6 @@ export const launchImageLibrary = (
 ): Promise<PickerResponse> =>
   NativeMediaPicker.launchImageLibrary(normalizeLibraryOptions(options));
 
-/** @internal exported for tests; normalization may change between versions. */
 export const normalizeCameraOptions = (
   options: CameraOptions
 ): NativeCameraOptions => {
@@ -84,15 +70,5 @@ export const launchCamera = (
 ): Promise<PickerResponse> =>
   NativeMediaPicker.launchCamera(normalizeCameraOptions(options));
 
-/**
- * Deletes every temp file this library has produced. URIs from earlier picks
- * become invalid, so call it once you have copied or uploaded the assets you
- * need. Never rejects.
- *
- * Do not call it while a pick is in flight: the sweep empties the whole
- * directory, including files the running pick is still using. On Android it
- * deletes the file the camera app is writing into, and the capture then resolves
- * `{ didCancel: true }`. Wait for the pick's promise to settle first.
- */
 export const cleanTempFiles = (): Promise<void> =>
   NativeMediaPicker.cleanTempFiles();

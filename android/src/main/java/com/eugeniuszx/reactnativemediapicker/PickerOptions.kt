@@ -8,26 +8,15 @@ internal enum class CameraFacing {
   ;
 
   companion object {
-    /** Unknown values fall back to BACK, matching the JS-side normalization. */
     fun from(raw: String?): CameraFacing =
       if (raw == "front") FRONT else BACK
   }
 }
 
-/**
- * Immutable per-request options. Parsed once at the module boundary so nothing
- * downstream can be mutated mid-batch by a subsequent call.
- *
- * `quality` is converted from the JS 0..1 range to the 0..100 that
- * [android.graphics.Bitmap.compress] expects, right here and nowhere else.
- */
 internal data class LibraryOptions(
-  /** 0 means unlimited. */
   val selectionLimit: Int,
-  /** 0 means "no bound on this axis". */
   val maxWidth: Int,
   val maxHeight: Int,
-  /** 0..100. */
   val quality: Int,
   val includeBase64: Boolean,
 ) {

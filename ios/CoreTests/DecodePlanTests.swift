@@ -64,10 +64,7 @@ final class DecodePlanTests: XCTestCase {
     XCTAssertEqual(tall.targetHeight, 1000)
   }
 
-  /// Defect #2 regression: for a quarter-turned image the bounds must be applied
-  /// to the *displayed* axes, not to the raw buffer's axes.
   func testBoundsApplyToDisplayedAxesForRotatedImages() {
-    // Buffer is 4000x3000, EXIF 6 displays it as 3000x4000 (portrait).
     let p = plan(4000, 3000, maxWidth: 600, maxHeight: 600, exif: 6)
     XCTAssertEqual(p.displayWidth, 3000)
     XCTAssertEqual(p.displayHeight, 4000)
@@ -77,21 +74,16 @@ final class DecodePlanTests: XCTestCase {
   }
 
   func testRotatedImageWithinBoundsAfterSwapIsPassedThrough() {
-    // 400x800 buffer displays as 800x400; a 900x900 bound leaves it untouched.
     let p = plan(400, 800, maxWidth: 900, maxHeight: 900, exif: 6)
     XCTAssertFalse(p.needsTransform)
     XCTAssertEqual(p.displayWidth, 800)
     XCTAssertEqual(p.displayHeight, 400)
   }
 
-  /// Verified against the reference computation: a 4000x3000 source bounded to
-  /// 1000 has a 1000x750 target, and 4000/4 == 1000 exactly, so 4 is the largest
-  /// factor that does not undershoot. Halving again would drop to 500 < 1000.
   func testSampleSizeIsTheLargestPowerOfTwoThatStillCoversTheTarget() {
     XCTAssertEqual(plan(4000, 3000, maxWidth: 1000, maxHeight: 1000).sampleSize, 4)
     XCTAssertEqual(plan(4000, 3000, maxWidth: 500, maxHeight: 500).sampleSize, 8)
     XCTAssertEqual(plan(4000, 3000, maxWidth: 250, maxHeight: 250).sampleSize, 16)
-    // Target 2500x1875 is more than half the source, so no downsample applies.
     XCTAssertEqual(plan(4000, 3000, maxWidth: 2500, maxHeight: 2500).sampleSize, 1)
   }
 
@@ -101,9 +93,6 @@ final class DecodePlanTests: XCTestCase {
     XCTAssertGreaterThanOrEqual(p.displayHeight / p.sampleSize, p.targetHeight)
   }
 
-  /// Regression for the Double round-trip: `(1000/5712)*5712` is not exactly
-  /// 1000 in binary64, so flooring it used to return 999 for an iPhone 48MP
-  /// capture. The binding axis must land on its bound exactly.
   func testBindingAxisLandsExactlyOnItsBound() {
     let large = plan(5712, 4284, maxWidth: 1000, maxHeight: 1000)
     XCTAssertEqual(large.targetWidth, 1000)
@@ -114,14 +103,6 @@ final class DecodePlanTests: XCTestCase {
     XCTAssertEqual(medium.targetHeight, 601)
   }
 
-  /// A caller may pass a huge number instead of the documented 0 to mean "no
-  /// bound on this axis". `Number.MAX_SAFE_INTEGER` times a 3000px height
-  /// overflows Int64, and Swift traps on overflow — so without the cap in
-  /// `compute` this input crashes the process rather than returning a size.
-  ///
-  /// Note the failure mode if the cap is ever removed: this test aborts the
-  /// runner (SIGILL) instead of failing cleanly. That is the honest signal for
-  /// a trap, and a smaller sentinel would not reach the overflow at all.
   func testSentinelSizedBoundDoesNotOverflow() {
     let p = plan(4000, 3000, maxWidth: 9_007_199_254_740_991, maxHeight: 500)
     XCTAssertEqual(p.targetWidth, 666)
@@ -142,8 +123,6 @@ final class DecodePlanTests: XCTestCase {
     XCTAssertEqual(p.sampleSize, 1)
   }
 
-  /// A failed bounds-only decode reports -1, not 0. A negative width must never
-  /// reach JS, and both cores must clamp it the same way.
   func testNegativeDimensionsAreClampedToZero() {
     let p = plan(-1, -1, maxWidth: 640, maxHeight: 640)
     XCTAssertFalse(p.needsTransform)

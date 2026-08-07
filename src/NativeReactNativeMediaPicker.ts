@@ -11,7 +11,6 @@ export type Asset = {
   base64?: string;
 };
 
-/** Closed set of failure codes the natives can report. */
 export type ErrorCode = 'permission' | 'camera_unavailable' | 'others';
 
 export type PickerResponse = {
@@ -21,8 +20,6 @@ export type PickerResponse = {
   assets?: Asset[];
 };
 
-// Fully-populated options object. The TS wrapper fills every field with a
-// concrete value before calling native, so codegen never sees optionals here.
 export type NativeLibraryOptions = {
   selectionLimit: number;
   maxWidth: number;
@@ -31,7 +28,6 @@ export type NativeLibraryOptions = {
   includeBase64: boolean;
 };
 
-// Fully-populated camera options; the TS wrapper fills every field before the call.
 export type NativeCameraOptions = {
   cameraType: string;
   maxWidth: number;

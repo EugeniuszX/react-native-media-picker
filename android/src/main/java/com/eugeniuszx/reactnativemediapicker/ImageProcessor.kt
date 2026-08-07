@@ -7,18 +7,10 @@ import android.graphics.Matrix
 import android.net.Uri
 import android.os.Build
 import android.util.Base64
-// NOTE: `Log` is imported by ReactNativeMediaPickerModule.kt, not here.
 import androidx.exifinterface.media.ExifInterface
 import java.io.File
 import java.io.FileOutputStream
 
-/**
- * Turns a content URI into an [AssetPayload]. Stateless — every call carries its
- * own options, so concurrent calls cannot interfere.
- *
- * Metadata (bounds, mime, EXIF) is read up front so images that need no work are
- * never decoded, and each piece of metadata is read exactly once.
- */
 internal class ImageProcessor(
   private val resolver: ContentResolver,
   private val tempFiles: TempFileStore,
@@ -33,7 +25,6 @@ internal class ImageProcessor(
     val srcMime = MediaFormat.normalizeMime(resolver.getType(uri))
     val bounds = readBounds(uri)
     val orientation = readOrientation(uri)
-    // GIF is always treated as animated; WebP needs a header probe.
     val isAnimated = srcMime == "image/gif" ||
       (srcMime == "image/webp" && isAnimatedWebp(uri))
 
@@ -52,8 +43,6 @@ internal class ImageProcessor(
       passthrough(uri, srcMime, plan, includeBase64)
     }
   }
-
-  // MARK: - Metadata
 
   private fun readBounds(uri: Uri): Pair<Int, Int> {
     val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -92,9 +81,6 @@ internal class ImageProcessor(
     false
   }
 
-  // MARK: - Passthrough
-
-  /** Copies the original encoded bytes verbatim, preserving format and EXIF. */
   private fun passthrough(
     uri: Uri,
     mime: String,
@@ -102,7 +88,6 @@ internal class ImageProcessor(
     includeBase64: Boolean,
   ): AssetPayload {
     val outFile = tempFiles.createFile(MediaFormat.extensionForMime(mime))
-    // Stream-copy by default; only hold bytes in memory when base64 is asked for.
     var base64: String? = null
     resolver.openInputStream(uri).use { input ->
       input ?: throw IllegalStateException("Failed to open image stream")
@@ -117,9 +102,6 @@ internal class ImageProcessor(
     return payload(outFile, mime, plan.displayWidth, plan.displayHeight, base64)
   }
 
-  // MARK: - Transform
-
-  /** Decodes, orients, scales and re-encodes in the source format. */
   private fun transform(
     uri: Uri,
     srcMime: String,
@@ -139,9 +121,6 @@ internal class ImageProcessor(
     val outFormat = MediaFormat.reencodeFormat(srcMime)
     val outMime = MediaFormat.reencodeMime(outFormat)
     val outFile = tempFiles.createFile(MediaFormat.extensionForMime(outMime))
-    // Compress straight to disk — the encoded bytes only enter memory when
-    // base64 was requested. A false return means nothing usable was written, so
-    // throw rather than hand JS a 0-byte asset; the caller drops the item.
     FileOutputStream(outFile).use { output ->
       if (!bitmap.compress(compressFormat(outFormat), quality, output)) {
         bitmap.recycle()
@@ -162,11 +141,6 @@ internal class ImageProcessor(
     return payload(outFile, outMime, width, height, base64)
   }
 
-  /**
-   * Applies rotation and mirroring in one matrix pass. The mirror is posted
-   * *after* the rotation, which is the order [ExifOrientation.isMirrored]
-   * documents — reversing it silently swaps EXIF 5 and EXIF 7.
-   */
   private fun applyOrientation(bitmap: Bitmap, orientation: ExifOrientation): Bitmap {
     if (orientation == ExifOrientation.UPRIGHT) return bitmap
     val matrix = Matrix().apply {

@@ -25,7 +25,6 @@ import java.io.File
 class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationContext) :
   NativeReactNativeMediaPickerSpec(reactContext),
   ActivityEventListener {
-
   private val moduleScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
   private val pending = PendingRequestHolder<PendingRequest>()
   private val intents = PickerIntentFactory(reactContext)
@@ -36,8 +35,6 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
 
   init {
     reactContext.addActivityEventListener(this)
-    // Sweep leftovers from previous runs. Anything recent is left alone in case
-    // JS is still holding a URI from a reload-surviving pick.
     moduleScope.launch {
       tempFiles.removeFilesOlderThan(
         TempFileStore.AUTO_SWEEP_AGE_MILLIS,
@@ -70,11 +67,6 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
       return
     }
 
-    // Throwable, not Exception: this guard owns the slot, and anything escaping
-    // it strands every later pick behind "Already waiting for a pick." for the
-    // process lifetime. MediaStore.getPickImagesMaxLimit() inside
-    // intents.imageLibrary is already lint-flagged NewApi, and the NoSuchMethodError
-    // it would raise on a platform without it is an Error, not an Exception.
     try {
       activity.startActivityForResult(intents.imageLibrary(parsed.selectionLimit), REQUEST_CODE)
     } catch (e: Throwable) {
@@ -105,10 +97,6 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
       return
     }
 
-    // Guarded because anything escaping would leave the request in the slot
-    // forever, and every later pick would answer "Already waiting for a pick."
-    // Throwable rather than Exception: an Error here is just as stranding, and
-    // this guard is the only thing standing between one and a bricked module.
     try {
       permissions.ensure(
         activity,
@@ -121,9 +109,6 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
   }
 
   override fun cleanTempFiles(promise: Promise) {
-    // Resolve first: the sweep is fire-and-forget, and a cancelled scope must
-    // not be able to strand the promise. Matches the iOS coordinator, and the
-    // API reports no result, so a caller cannot observe the difference.
     promise.resolve(null)
     moduleScope.launch {
       try {
@@ -143,17 +128,10 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
       return
     }
 
-    // Null only when invalidate() already answered this request; nothing to do.
     val request = pending.peek() ?: return
 
-    // One guard around the whole body: anything escaping here would strand the
-    // request in the slot and brick every later pick. FileProvider.getUriForFile
-    // in particular throws IllegalArgumentException if a host app has overridden
-    // the provider's declared paths. Throwable rather than Exception, because an
-    // Error strands the slot exactly as thoroughly as an exception does.
     try {
       val photoFile = tempFiles.createFile("jpg").apply { createNewFile() }
-      // From here on `fail` owns deleting the capture file.
       request.cameraFile = photoFile
 
       val authority = "${reactContext.packageName}.rnmediapicker.fileprovider"
@@ -183,14 +161,7 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
   }
 
   private fun handleLibraryResult(resultCode: Int, data: Intent?) {
-    // peek(), not take(): the slot stays claimed until the promise is actually
-    // settled, so a concurrent invalidate() always finds a request to answer and
-    // a second pick cannot start while this batch is still decoding (which would
-    // put 8 items in flight rather than the mandated 4). Matches iOS, which holds
-    // its session until the result is delivered.
     val request = pending.peek() ?: return
-    // A request without library options cannot be processed, but must still be
-    // answered rather than left hanging.
     val options = request.libraryOptions ?: run {
       settleAndRelease(
         request,
@@ -214,8 +185,6 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
 
     moduleScope.launch {
       try {
-        // Bounded fan-out: each in-flight item holds a decoded bitmap plus the
-        // encoded output, so this is the knob that caps peak memory.
         val gate = Semaphore(MAX_CONCURRENT_ITEMS)
         val assets = uris.map { uri ->
           async {
@@ -231,7 +200,6 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
               } catch (e: CancellationException) {
                 throw e
               } catch (e: Exception) {
-                // Drop the failed item and keep the rest, matching iOS.
                 Log.w(NAME, "failed to process $uri", e)
                 null
               }
@@ -259,9 +227,6 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
   }
 
   private fun handleCameraResult(resultCode: Int) {
-    // peek(), not take() — see handleLibraryResult. `cameraFile` deliberately
-    // stays set: the coroutine's `finally` and invalidate() may both delete it,
-    // and File.delete() on a missing file just returns false.
     val request = pending.peek() ?: return
     val file = request.cameraFile
 
@@ -300,8 +265,6 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
           ResponseFactory.failure(PickerError.OTHERS, e.message ?: "processing error"),
         )
       } finally {
-        // The raw capture is superseded by the processed output. Runs on
-        // cancellation too, so invalidate() cannot orphan it.
         file.delete()
       }
     }
@@ -310,10 +273,7 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
   override fun onNewIntent(intent: Intent) {}
 
   override fun invalidate() {
-    // settle() is idempotent, so an in-flight coroutine finishing after this
-    // point cannot resolve the promise a second time.
     pending.take()?.let { request ->
-      // A capture still in the camera app's hands is orphaned from here on.
       request.cameraFile?.delete()
       request.cameraFile = null
       request.settle(
@@ -324,27 +284,11 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
     super.invalidate()
   }
 
-  /**
-   * Settles the request and only then releases the slot, so a concurrent
-   * invalidate() always finds a request to answer. settle() is idempotent, so
-   * whichever side wins, the promise is answered exactly once.
-   *
-   * The release is identity-checked. Both result handlers use peek(), so a
-   * duplicate REQUEST_CODE delivery can run this twice for the same request:
-   * the second settle() is a no-op, but an unconditional take() would clear
-   * whatever is in the slot *now* — possibly a freshly begun second pick, which
-   * would then never be settled at all.
-   */
   private fun settleAndRelease(request: PendingRequest, value: WritableMap) {
     request.settle(value)
     pending.release(request)
   }
 
-  /**
-   * Answers the in-flight request with a failure, cleaning up any capture file
-   * it still owns. A no-op when something else already took the request. Only
-   * reached before a result arrives, so no coroutine can be holding the slot.
-   */
   private fun fail(error: PickerError, message: String) {
     pending.take()?.let { request ->
       request.cameraFile?.delete()

@@ -65,7 +65,6 @@ class DecodePlanTest {
     assertEquals(1000, tall.targetHeight)
   }
 
-  /** Defect regression: bounds apply to the displayed axes, not the raw buffer. */
   @Test
   fun `bounds apply to displayed axes for rotated images`() {
     val p = plan(4000, 3000, maxWidth = 600, maxHeight = 600, exif = 6)
@@ -84,17 +83,11 @@ class DecodePlanTest {
     assertEquals(400, p.displayHeight)
   }
 
-  /**
-   * Same expectations as `ios/CoreTests/DecodePlanTests.swift`: a 4000x3000
-   * source bounded to 1000 has a 1000x750 target and 4000/4 == 1000 exactly, so
-   * 4 is the largest factor that does not undershoot.
-   */
   @Test
   fun `sample size is the largest power of two that still covers the target`() {
     assertEquals(4, plan(4000, 3000, maxWidth = 1000, maxHeight = 1000).sampleSize)
     assertEquals(8, plan(4000, 3000, maxWidth = 500, maxHeight = 500).sampleSize)
     assertEquals(16, plan(4000, 3000, maxWidth = 250, maxHeight = 250).sampleSize)
-    // Target 2500x1875 is more than half the source, so no downsample applies.
     assertEquals(1, plan(4000, 3000, maxWidth = 2500, maxHeight = 2500).sampleSize)
   }
 
@@ -105,7 +98,6 @@ class DecodePlanTest {
     assertTrue(p.displayHeight / p.sampleSize >= p.targetHeight)
   }
 
-  /** Mirrors `testBindingAxisLandsExactlyOnItsBound` in the Swift core. */
   @Test
   fun `binding axis lands exactly on its bound`() {
     val large = plan(5712, 4284, maxWidth = 1000, maxHeight = 1000)
@@ -117,13 +109,6 @@ class DecodePlanTest {
     assertEquals(601, medium.targetHeight)
   }
 
-  /**
-   * The Swift core's overflow sibling has no Kotlin equivalent: `maxWidth`
-   * arrives through `ReadableMap.getInt`, so it cannot exceed `Int.MAX_VALUE`,
-   * and the cross-products are widened to `Long` — the product cannot overflow.
-   * What is still worth pinning is the shared semantics: a bound looser than
-   * the source is simply not the binding axis.
-   */
   @Test
   fun `a bound larger than the source is never the binding axis`() {
     val p = plan(4000, 3000, maxWidth = Int.MAX_VALUE, maxHeight = 500)
@@ -146,11 +131,6 @@ class DecodePlanTest {
     assertEquals(1, p.sampleSize)
   }
 
-  /**
-   * BitmapFactory.Options.outWidth is -1 when a bounds-only decode fails, which
-   * is exactly the unreadable-metadata case. A negative width must never reach
-   * JS, and both cores must clamp it the same way.
-   */
   @Test
   fun `negative dimensions are clamped to zero`() {
     val p = plan(-1, -1, maxWidth = 640, maxHeight = 640)

@@ -6,7 +6,6 @@ import android.net.Uri
 import android.provider.MediaStore
 import androidx.activity.result.contract.ActivityResultContracts
 
-/** Builds the intents for gallery picks and camera captures. */
 internal class PickerIntentFactory(private val context: Context) {
   fun imageLibrary(selectionLimit: Int): Intent =
     if (ActivityResultContracts.PickVisualMedia.isPhotoPickerAvailable(context)) {
@@ -33,19 +32,16 @@ internal class PickerIntentFactory(private val context: Context) {
       putExtra(MediaStore.EXTRA_OUTPUT, outputUri)
       addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
       if (facing == CameraFacing.FRONT) {
-        // Best-effort: the system camera app is free to ignore all of these.
         putExtra("android.intent.extras.CAMERA_FACING", 1)
         putExtra("android.intent.extras.LENS_FACING_FRONT", 1)
         putExtra("android.intent.extra.USE_FRONT_CAMERA", true)
       }
     }
 
-  /** `resolveActivity` is deprecated and package-visibility restricted. */
   @Suppress("DEPRECATION")
   fun canBeHandled(intent: Intent): Boolean =
     context.packageManager.queryIntentActivities(intent, 0).isNotEmpty()
 
-  /** Collects one or many URIs out of a picker result. */
   fun collectUris(data: Intent): List<Uri> {
     val clip = data.clipData
     if (clip != null) {

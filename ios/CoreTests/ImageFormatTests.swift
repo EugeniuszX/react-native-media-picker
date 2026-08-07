@@ -38,7 +38,6 @@ final class ImageFormatTests: XCTestCase {
     XCTAssertEqual(ImageFormat.png.reencodeFormat, .png)
     XCTAssertEqual(ImageFormat.heic.reencodeFormat, .heic)
     XCTAssertEqual(ImageFormat.jpeg.reencodeFormat, .jpeg)
-    // No system WebP encoder on iOS.
     XCTAssertEqual(ImageFormat.webp.reencodeFormat, .jpeg)
     XCTAssertEqual(ImageFormat.gif.reencodeFormat, .jpeg)
   }
@@ -60,12 +59,11 @@ final class ImageFormatTests: XCTestCase {
     XCTAssertFalse(ImageFormat.isAnimatedWebP(header: notVP8X))
   }
 
-  /// 21-byte RIFF/WEBP/VP8X prefix with the given flags byte at offset 20.
   private static func webpHeader(flags: UInt8) -> Data {
     var bytes = [UInt8](repeating: 0, count: 21)
-    bytes[0...3] = [0x52, 0x49, 0x46, 0x46]  // RIFF
-    bytes[8...11] = [0x57, 0x45, 0x42, 0x50]  // WEBP
-    bytes[12...15] = [0x56, 0x50, 0x38, 0x58]  // VP8X
+    bytes[0...3] = [0x52, 0x49, 0x46, 0x46]
+    bytes[8...11] = [0x57, 0x45, 0x42, 0x50]
+    bytes[12...15] = [0x56, 0x50, 0x38, 0x58]
     bytes[20] = flags
     return Data(bytes)
   }
