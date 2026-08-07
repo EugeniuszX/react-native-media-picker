@@ -8,22 +8,19 @@ export type Asset = {
   fileSize?: number;
   width?: number;
   height?: number;
-  // Forward-compat for video (Phase 3); never set for photos.
-  duration?: number;
   base64?: string;
 };
 
+export type ErrorCode = 'permission' | 'camera_unavailable' | 'others';
+
 export type PickerResponse = {
   didCancel: boolean;
-  errorCode?: string;
+  errorCode?: ErrorCode;
   errorMessage?: string;
   assets?: Asset[];
 };
 
-// Fully-populated options object. The TS wrapper fills every field with a
-// concrete value before calling native, so codegen never sees optionals here.
 export type NativeLibraryOptions = {
-  mediaType: string;
   selectionLimit: number;
   maxWidth: number;
   maxHeight: number;
@@ -31,7 +28,6 @@ export type NativeLibraryOptions = {
   includeBase64: boolean;
 };
 
-// Fully-populated camera options; the TS wrapper fills every field before the call.
 export type NativeCameraOptions = {
   cameraType: string;
   maxWidth: number;
@@ -43,6 +39,7 @@ export type NativeCameraOptions = {
 export interface Spec extends TurboModule {
   launchImageLibrary(options: NativeLibraryOptions): Promise<PickerResponse>;
   launchCamera(options: NativeCameraOptions): Promise<PickerResponse>;
+  cleanTempFiles(): Promise<void>;
 }
 
 export default TurboModuleRegistry.getEnforcing<Spec>('ReactNativeMediaPicker');

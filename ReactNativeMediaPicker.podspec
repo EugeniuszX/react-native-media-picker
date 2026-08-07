@@ -14,6 +14,7 @@ Pod::Spec.new do |s|
   s.source       = { :git => "https://github.com/EugeniuszX/react-native-media-picker.git", :tag => "#{s.version}" }
 
   s.source_files = "ios/**/*.{h,m,mm,swift,cpp}"
+  s.exclude_files = "ios/CoreTests/**/*"
   s.private_header_files = "ios/**/*.h"
 
   install_modules_dependencies(s)

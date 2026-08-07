@@ -3,7 +3,6 @@ import { normalizeLibraryOptions } from '../index';
 describe('normalizeLibraryOptions', () => {
   it('applies defaults for an empty object', () => {
     expect(normalizeLibraryOptions({})).toEqual({
-      mediaType: 'photo',
       selectionLimit: 1,
       maxWidth: 0,
       maxHeight: 0,
@@ -38,18 +37,5 @@ describe('normalizeLibraryOptions', () => {
     expect(r.selectionLimit).toBe(2);
     expect(r.maxWidth).toBe(640);
     expect(r.maxHeight).toBe(480);
-  });
-
-  it('falls back to "photo" for an invalid mediaType', () => {
-    // @ts-expect-error testing runtime guard
-    expect(normalizeLibraryOptions({ mediaType: 'banana' }).mediaType).toBe(
-      'photo'
-    );
-  });
-
-  it('passes through valid mediaType values', () => {
-    expect(normalizeLibraryOptions({ mediaType: 'video' }).mediaType).toBe(
-      'video'
-    );
   });
 });

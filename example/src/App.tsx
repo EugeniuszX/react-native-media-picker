@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import {
+  cleanTempFiles,
   launchCamera,
   launchImageLibrary,
   type Asset,
@@ -71,6 +72,18 @@ export default function App() {
       });
   };
 
+  const clear = () => {
+    setStatus('cleaning temp files…');
+    cleanTempFiles()
+      .then(() => {
+        setAssets([]);
+        setStatus('temp files cleaned');
+      })
+      .catch((e: unknown) => {
+        setStatus(`threw: ${String(e)}`);
+      });
+  };
+
   return (
     <SafeAreaView style={styles.root}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -82,6 +95,7 @@ export default function App() {
           title="Toggle front/back"
           onPress={() => setFacing((f) => (f === 'back' ? 'front' : 'back'))}
         />
+        <Button title="Clean temp files" onPress={clear} />
         <Text style={styles.status}>{status}</Text>
         {assets.map((a) => (
           <View key={a.uri} style={styles.card}>

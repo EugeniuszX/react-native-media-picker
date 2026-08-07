@@ -1771,7 +1771,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - ReactNativeMediaPicker (0.1.0):
+  - ReactNativeMediaPicker (0.2.1):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2110,7 +2110,7 @@ SPEC CHECKSUMS:
   ReactCommon: fe2a3af8975e63efa60f95fca8c34dc85deee360
   ReactNativeDependencies: deaabd242add85a6068333588b852fc0e67e5761
   ReactNativeHost: 00da7c5e36b3b638eb9d27985df2406f0e434ced
-  ReactNativeMediaPicker: 1bffd181f19a49f2923f49157e289e0a2c27efab
+  ReactNativeMediaPicker: 4a37759916c017962572af60c1985b76e69fd163
   ReactTestApp-DevSupport: 749178de1e1daea86a010abc8a5dd5d989d3afd5
   ReactTestApp-Resources: 1bd9ff10e4c24f2ad87101a32023721ae923bccf
   Yoga: cc155241ea30670878e270d52d74cf29487c4bbb
