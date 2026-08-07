@@ -11,6 +11,14 @@ final class LibraryPicker: NSObject, PHPickerViewControllerDelegate {
   /// is the knob that bounds peak memory on large selections.
   static let maxConcurrentItemLoads = 4
 
+  /// Liveness backstop, not an expected duration: the dismissal completion is
+  /// observed to fire well inside this, and nothing waits the full interval in
+  /// normal operation. It exists so that a `dismiss(animated:completion:)` that
+  /// never calls back — an undocumented UIKit property we cannot rely on —
+  /// degrades to a late resolution instead of a promise that strands the
+  /// single-flight session for the lifetime of the process.
+  static let dismissalTimeout: TimeInterval = 3
+
   private let options: LibraryOptions
   private let processor: ImageProcessor
   private let finish: ([AssetPayload]?, Bool, PickerError?, String?) -> Void
@@ -64,7 +72,12 @@ final class LibraryPicker: NSObject, PHPickerViewControllerDelegate {
     picker.dismiss(animated: true) { dismissed.leave() }
 
     guard !results.isEmpty else {
-      dismissed.notify(queue: .main) { [self] in complete(nil, true, nil, nil) }
+      // Bounded: a missing dismissal callback must degrade to a late resolution,
+      // never to a promise that strands the single-flight session forever.
+      DispatchQueue.global(qos: .userInitiated).async { [self] in
+        _ = dismissed.wait(timeout: .now() + Self.dismissalTimeout)
+        complete(nil, true, nil, nil)
+      }
       return
     }
 
@@ -120,8 +133,9 @@ final class LibraryPicker: NSObject, PHPickerViewControllerDelegate {
       group.wait()
       // Safe to block here: this is a global queue, and the dismissal
       // completion is delivered on main, which nothing in this path holds.
-      // Processing and the animation overlap rather than serialize.
-      dismissed.wait()
+      // Processing and the animation overlap rather than serialize. Bounded so
+      // a missing dismissal callback cannot strand the session forever.
+      _ = dismissed.wait(timeout: .now() + Self.dismissalTimeout)
       let assets = slots.compactMap { $0 }
       if assets.isEmpty {
         // The selection was non-empty but nothing survived loading/processing.

@@ -16,5 +16,16 @@ internal class PendingRequestHolder<T : Any> {
   /** Hands the request to the first caller and clears the slot. */
   fun take(): T? = current.getAndSet(null)
 
+  /**
+   * Clears the slot only if [expected] is still the request in it. Returns true
+   * when it was cleared.
+   *
+   * The identity check is the point: a duplicate activity result can spawn a
+   * second coroutine for a request that is already settled, and an unconditional
+   * [take] there would evict a *newer* request that had since claimed the slot,
+   * leaving it to be discarded unsettled.
+   */
+  fun release(expected: T): Boolean = current.compareAndSet(expected, null)
+
   fun peek(): T? = current.get()
 }

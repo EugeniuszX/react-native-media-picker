@@ -40,7 +40,7 @@ if (!result.didCancel && result.assets) {
 
 | Option | Type | Default | Notes |
 |---|---|---|---|
-| `selectionLimit` | `number` | `1` | `0` = unlimited |
+| `selectionLimit` | `number` | `1` | `0` = unlimited (see note below) |
 | `maxWidth` | `number` | `0` | `0` = no resize |
 | `maxHeight` | `number` | `0` | `0` = no resize |
 | `quality` | `number` | `1` | Re-encode quality 0..1 (JPEG/WebP/HEIC); ignored for lossless PNG and for animated images |
@@ -48,12 +48,22 @@ if (!result.didCancel && result.assets) {
 
 Only photos are picked. Video support is not implemented yet.
 
+On Android, "unlimited" is capped by the system Photo Picker:
+`selectionLimit: 0` requests `MediaStore.getPickImagesMaxLimit()`, and any larger
+explicit limit is clamped to it. iOS has no such cap.
+
 ## `Asset`
 
 Each picked item resolves to: `uri` (a `file://` path to a temp file), `type`
 (the source mime — `image/jpeg`, `image/png`, `image/heic`, `image/gif`, or
 `image/webp`), `fileName` (extension matches `type`), `fileSize`, `width`,
 `height`, and `base64` (only when `includeBase64` is true).
+
+`uri` and `type` are the only fields declared non-optional. `fileName`,
+`fileSize`, `width` and `height` are typed `?:`, so TypeScript makes you narrow
+them. Both native modules do populate all four today, but `width` and `height`
+are reported as `0` when the image metadata cannot be read — treat `0` as
+"unknown", not as a real dimension.
 
 `width` and `height` are the dimensions **as displayed** — the EXIF orientation
 is already applied. For an image whose orientation is a quarter turn they are
@@ -155,6 +165,18 @@ It never rejects. The returned promise resolves as soon as the sweep is
 scheduled, not once the files are gone, so treat it as "these URIs are now
 unusable" rather than as a completed deletion.
 
+**Do not call it while a pick is in flight.** The sweep empties the whole
+directory, including files the running pick is still using. On Android it
+deletes the file the camera app is writing into, and the capture then resolves
+`{ didCancel: true }` as though the user had backed out; on either platform it
+can delete a just-written asset before its `uri` reaches you. Call it after the
+`launchImageLibrary` / `launchCamera` promise has settled.
+
+Upgrading from 0.2.x: temp files written by earlier versions went straight into
+the cache/temp directory rather than the `rn-media-picker` subdirectory, so
+neither `cleanTempFiles` nor the 24-hour sweep touches them. They are left to the
+OS to reclaim.
+
 ## Permissions
 
 Gallery picking needs **no** permissions. Camera capture may require permissions — see
@@ -173,9 +195,20 @@ Gallery picking needs **no** permissions. Camera capture may require permissions
   swept when the native module initializes — see [Temp files](#temp-files).
 - On Android, a multi-image pick where some items fail now returns the
   successful ones instead of failing the whole batch, matching iOS.
-- On Android, `width`/`height` for resized images whose EXIF orientation is a
-  quarter turn are now correct; previously the resize bounds were applied to the
-  pre-rotation axes.
+- On Android, `maxWidth`/`maxHeight` are now honoured for images whose EXIF
+  orientation is a quarter turn. Previously the bounds were tested against the
+  stored pixel buffer rather than the displayed axes, so such an image could skip
+  the resize entirely and come back **larger than the bound you asked for** — a
+  3000×4000 buffer that displays as 4000×3000 was returned untouched at 4000px
+  wide under `maxWidth: 3500`. (Reported `width`/`height` were never wrong; they
+  always described the file that was returned.) Those images are now re-encoded
+  where they previously were not, so for them `type` can change (HEIC becomes
+  `image/jpeg` on Android), `fileSize` changes, and `quality` starts applying.
+- On iOS, a `launchImageLibrary` call rejected because another pick is in flight
+  now reports `errorMessage: 'Already waiting for a pick.'` instead of
+  `'Already waiting for an image pick.'`. Both platforms and both entry points
+  now use the one string. `errorCode` is unchanged (`'others'`), so code matching
+  on the old message fails silently — match on `errorCode` instead.
 - On Android, the single-pick-in-flight window now extends through image
   processing instead of ending the moment the picker closes. A pick started while
   the previous batch is still decoding resolves `errorCode: 'others'` with

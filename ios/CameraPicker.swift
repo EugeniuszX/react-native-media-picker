@@ -6,6 +6,11 @@ import UIKit
 final class CameraPicker: NSObject, UIImagePickerControllerDelegate,
   UINavigationControllerDelegate
 {
+  /// Liveness backstop, not an expected duration — see the same constant on
+  /// `LibraryPicker`. A `dismiss(animated:completion:)` that never calls back
+  /// must degrade to a late resolution, never to a promise that strands the
+  /// single-flight session for the lifetime of the process.
+  static let dismissalTimeout: TimeInterval = 3
 
   private let options: CameraOptions
   private let processor: ImageProcessor
@@ -91,7 +96,10 @@ final class CameraPicker: NSObject, UIImagePickerControllerDelegate,
     picker.dismiss(animated: true) { dismissed.leave() }
 
     guard let image = info[.originalImage] as? UIImage else {
-      dismissed.notify(queue: .main) { [self] in
+      // Bounded: a missing dismissal callback must degrade to a late resolution,
+      // never to a promise that strands the single-flight session forever.
+      DispatchQueue.global(qos: .userInitiated).async { [self] in
+        _ = dismissed.wait(timeout: .now() + Self.dismissalTimeout)
         complete(nil, false, .others, "Failed to capture image")
       }
       return
@@ -106,7 +114,8 @@ final class CameraPicker: NSObject, UIImagePickerControllerDelegate,
       )
       // Safe to block here: this is a global queue, and the dismissal
       // completion is delivered on main, which nothing in this path holds.
-      dismissed.wait()
+      // Bounded so a missing dismissal callback cannot strand the session.
+      _ = dismissed.wait(timeout: .now() + Self.dismissalTimeout)
       guard let payload else {
         complete(nil, false, .others, "Failed to capture image")
         return
@@ -116,7 +125,17 @@ final class CameraPicker: NSObject, UIImagePickerControllerDelegate,
   }
 
   func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-    picker.dismiss(animated: true) { [self] in complete(nil, true, nil, nil) }
+    // Same shape as the success path: resolve only once the picker is off
+    // screen, but bounded, so a missing dismissal callback degrades to a late
+    // resolution rather than stranding the single-flight session forever.
+    let dismissed = DispatchGroup()
+    dismissed.enter()
+    picker.dismiss(animated: true) { dismissed.leave() }
+
+    DispatchQueue.global(qos: .userInitiated).async { [self] in
+      _ = dismissed.wait(timeout: .now() + Self.dismissalTimeout)
+      complete(nil, true, nil, nil)
+    }
   }
 
   private func complete(

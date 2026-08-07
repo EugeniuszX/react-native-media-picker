@@ -24,6 +24,18 @@ export default defineConfig([
     },
   },
   {
-    ignores: ['node_modules/', 'lib/'],
+    // Build output. The lint script globs `**/*.{js,ts,tsx}`, and Gradle drops
+    // JS into its HTML test reports — thousands of prettier errors after any
+    // local `./gradlew` run. CI never sees it because it lints a fresh checkout.
+    // Kept in step with the `clean` script in package.json.
+    ignores: [
+      'node_modules/',
+      'lib/',
+      'android/build/',
+      'ios/build/',
+      'example/android/build/',
+      'example/android/app/build/',
+      'example/ios/build/',
+    ],
   },
 ]);

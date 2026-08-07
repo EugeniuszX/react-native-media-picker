@@ -70,9 +70,14 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
       return
     }
 
+    // Throwable, not Exception: this guard owns the slot, and anything escaping
+    // it strands every later pick behind "Already waiting for a pick." for the
+    // process lifetime. MediaStore.getPickImagesMaxLimit() inside
+    // intents.imageLibrary is already lint-flagged NewApi, and the NoSuchMethodError
+    // it would raise on a platform without it is an Error, not an Exception.
     try {
       activity.startActivityForResult(intents.imageLibrary(parsed.selectionLimit), REQUEST_CODE)
-    } catch (e: Exception) {
+    } catch (e: Throwable) {
       pending.take()
       request.settle(ResponseFactory.failure(PickerError.OTHERS, e.message ?: "launch error"))
     }
@@ -100,15 +105,17 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
       return
     }
 
-    // Guarded because an escaping exception would leave the request in the slot
+    // Guarded because anything escaping would leave the request in the slot
     // forever, and every later pick would answer "Already waiting for a pick."
+    // Throwable rather than Exception: an Error here is just as stranding, and
+    // this guard is the only thing standing between one and a bricked module.
     try {
       permissions.ensure(
         activity,
         onGranted = { launchCameraIntent(parsed) },
         onDenied = { error, message -> fail(error, message) },
       )
-    } catch (e: Exception) {
+    } catch (e: Throwable) {
       fail(PickerError.OTHERS, e.message ?: "failed to request camera permission")
     }
   }
@@ -142,7 +149,8 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
     // One guard around the whole body: anything escaping here would strand the
     // request in the slot and brick every later pick. FileProvider.getUriForFile
     // in particular throws IllegalArgumentException if a host app has overridden
-    // the provider's declared paths.
+    // the provider's declared paths. Throwable rather than Exception, because an
+    // Error strands the slot exactly as thoroughly as an exception does.
     try {
       val photoFile = tempFiles.createFile("jpg").apply { createNewFile() }
       // From here on `fail` owns deleting the capture file.
@@ -157,7 +165,7 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
         return
       }
       activity.startActivityForResult(intent, CAMERA_REQUEST_CODE)
-    } catch (e: Exception) {
+    } catch (e: Throwable) {
       fail(PickerError.OTHERS, e.message ?: "failed to launch the camera")
     }
   }
@@ -320,10 +328,16 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
    * Settles the request and only then releases the slot, so a concurrent
    * invalidate() always finds a request to answer. settle() is idempotent, so
    * whichever side wins, the promise is answered exactly once.
+   *
+   * The release is identity-checked. Both result handlers use peek(), so a
+   * duplicate REQUEST_CODE delivery can run this twice for the same request:
+   * the second settle() is a no-op, but an unconditional take() would clear
+   * whatever is in the slot *now* — possibly a freshly begun second pick, which
+   * would then never be settled at all.
    */
   private fun settleAndRelease(request: PendingRequest, value: WritableMap) {
     request.settle(value)
-    pending.take()
+    pending.release(request)
   }
 
   /**

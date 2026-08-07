@@ -85,9 +85,14 @@ export const launchCamera = (
   NativeMediaPicker.launchCamera(normalizeCameraOptions(options));
 
 /**
- * Deletes every temp file this library has produced. Safe to call at any time —
- * URIs from earlier picks become invalid, so call it once you have copied or
- * uploaded the assets you need. Never rejects.
+ * Deletes every temp file this library has produced. URIs from earlier picks
+ * become invalid, so call it once you have copied or uploaded the assets you
+ * need. Never rejects.
+ *
+ * Do not call it while a pick is in flight: the sweep empties the whole
+ * directory, including files the running pick is still using. On Android it
+ * deletes the file the camera app is writing into, and the capture then resolves
+ * `{ didCancel: true }`. Wait for the pick's promise to settle first.
  */
 export const cleanTempFiles = (): Promise<void> =>
   NativeMediaPicker.cleanTempFiles();

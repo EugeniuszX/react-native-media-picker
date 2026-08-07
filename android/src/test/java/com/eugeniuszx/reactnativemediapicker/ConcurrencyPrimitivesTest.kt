@@ -2,7 +2,9 @@ package com.eugeniuszx.reactnativemediapicker
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.After
 import org.junit.Before
@@ -75,6 +77,46 @@ class ConcurrencyPrimitivesTest {
     holder.take()
     assertTrue(holder.begin("second"))
     assertEquals("second", holder.take())
+  }
+
+  @Test
+  fun `release clears the slot when the request is still the current one`() {
+    val holder = PendingRequestHolder<String>()
+    holder.begin("first")
+
+    assertTrue(holder.release("first"))
+    assertNull(holder.peek())
+    // Idempotent: a duplicate activity result runs settleAndRelease twice.
+    assertFalse(holder.release("first"))
+  }
+
+  /**
+   * The stale-release defect. Both result handlers peek() rather than take(), so
+   * a duplicate REQUEST_CODE delivery can run settleAndRelease twice for one
+   * request. The second call's settle() is a no-op via OnceGate, but an
+   * unconditional take() there would evict whatever is in the slot *now* — a
+   * second pick that had already begun — leaving it to be discarded unsettled and
+   * its promise never answered.
+   *
+   * Identity, not equality: the two requests here are distinct String instances
+   * with the same content, and only a reference-identity check rejects the stale
+   * one. PendingRequest has no equals() today, so a switch to a data class must
+   * not silently turn this back into an equality check.
+   */
+  @Test
+  fun `release leaves a newer request in the slot`() {
+    val holder = PendingRequestHolder<String>()
+    val stale = String(charArrayOf('r', 'e', 'q'))
+    val fresh = String(charArrayOf('r', 'e', 'q'))
+    assertEquals(stale, fresh)
+    assertNotSame(stale, fresh)
+
+    holder.begin(stale)
+    holder.release(stale)
+    assertTrue(holder.begin(fresh))
+
+    assertFalse("stale release must not evict the newer request", holder.release(stale))
+    assertSame(fresh, holder.peek())
   }
 
   /** The check-then-act defect: two JS calls arriving at the same moment. */
