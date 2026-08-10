@@ -15,6 +15,7 @@ struct LibraryOptions: Equatable {
   let maxHeight: Int
   let quality: Double
   let includeBase64: Bool
+  let format: RequestedFormat
 }
 
 struct CameraOptions: Equatable {
@@ -23,6 +24,7 @@ struct CameraOptions: Equatable {
   let maxHeight: Int
   let quality: Double
   let includeBase64: Bool
+  let format: RequestedFormat
 }
 
 enum RequestedFormat: String {

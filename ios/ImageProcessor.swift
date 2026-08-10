@@ -13,6 +13,7 @@ struct ImageProcessor {
   func process(
     data: Data,
     format: ImageFormat,
+    requested: RequestedFormat,
     maxWidth: Int,
     maxHeight: Int,
     quality: Double,
@@ -22,16 +23,21 @@ struct ImageProcessor {
     let isAnimated =
       format == .gif
       || (format == .webp && ImageFormat.isAnimatedWebP(header: data))
+    let output = OutputPlan.resolve(
+      source: format,
+      requested: requested,
+      isAnimatedSource: isAnimated
+    )
     let plan = DecodePlan.compute(
       pixelWidth: metadata.pixelWidth,
       pixelHeight: metadata.pixelHeight,
       orientation: metadata.orientation,
       maxWidth: maxWidth,
       maxHeight: maxHeight,
-      isAnimated: isAnimated
+      isAnimated: output.preserveAnimation
     )
 
-    guard plan.needsTransform else {
+    guard plan.needsTransform || output.forceReencode else {
       return write(
         data: data,
         format: format,
@@ -42,10 +48,13 @@ struct ImageProcessor {
     }
 
     guard let image = UIImage(data: data) else { return nil }
-    let resized = redraw(image, width: plan.targetWidth, height: plan.targetHeight)
+    let targetWidth = plan.targetWidth > 0 ? plan.targetWidth : Int(image.size.width * image.scale)
+    let targetHeight =
+      plan.targetHeight > 0 ? plan.targetHeight : Int(image.size.height * image.scale)
+    let resized = redraw(image, width: targetWidth, height: targetHeight)
     return encodeAndWrite(
       resized,
-      format: format.reencodeFormat,
+      format: output.target,
       quality: quality,
       includeBase64: includeBase64
     )
@@ -53,6 +62,7 @@ struct ImageProcessor {
 
   func process(
     capturedImage image: UIImage,
+    requested: RequestedFormat,
     maxWidth: Int,
     maxHeight: Int,
     quality: Double,
@@ -60,6 +70,11 @@ struct ImageProcessor {
   ) -> AssetPayload? {
     let pixelWidth = image.cgImage?.width ?? Int(image.size.width * image.scale)
     let pixelHeight = image.cgImage?.height ?? Int(image.size.height * image.scale)
+    let output = OutputPlan.resolve(
+      source: .jpeg,
+      requested: requested,
+      isAnimatedSource: false
+    )
     let plan = DecodePlan.compute(
       pixelWidth: pixelWidth,
       pixelHeight: pixelHeight,
@@ -68,13 +83,13 @@ struct ImageProcessor {
       maxHeight: maxHeight,
       isAnimated: false
     )
-    let output =
+    let resized =
       plan.needsTransform
       ? redraw(image, width: plan.targetWidth, height: plan.targetHeight)
       : redraw(image, width: plan.displayWidth, height: plan.displayHeight)
     return encodeAndWrite(
-      output,
-      format: .jpeg,
+      resized,
+      format: output.target,
       quality: quality,
       includeBase64: includeBase64
     )

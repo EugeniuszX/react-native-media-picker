@@ -44,6 +44,7 @@ static NSDictionary *RNMediaPickerBuildResponse(NSArray<NSDictionary<NSString *,
                                               maxWidth:(NSInteger)options.maxWidth()
                                              maxHeight:(NSInteger)options.maxHeight()
                                                quality:options.quality()
+                                                format:options.format()
                                          includeBase64:options.includeBase64()
                                             completion:^(NSArray<NSDictionary<NSString *, id> *> *assets,
                                                          BOOL didCancel,
@@ -61,6 +62,7 @@ static NSDictionary *RNMediaPickerBuildResponse(NSArray<NSDictionary<NSString *,
                                     maxWidth:(NSInteger)options.maxWidth()
                                    maxHeight:(NSInteger)options.maxHeight()
                                      quality:options.quality()
+                                      format:options.format()
                                includeBase64:options.includeBase64()
                                   completion:^(NSArray<NSDictionary<NSString *, id> *> *assets,
                                                BOOL didCancel,
