@@ -56,8 +56,10 @@ explicit limit is clamped to it. iOS has no such cap.
 ## `Asset`
 
 Each picked item resolves to: `uri` (a `file://` path to a temp file), `type`
-(the source mime — `image/jpeg`, `image/png`, `image/heic`, `image/gif`, or
-`image/webp`), `fileName` (extension matches `type`), `fileSize`, `width`,
+(the output mime, matching the file actually written — `image/jpeg`,
+`image/png`, `image/heic`, `image/gif`, or `image/webp`; see
+[Format handling](#format-handling) for how it is derived), `fileName`
+(extension matches `type`), `fileSize`, `width`,
 `height`, and `base64` (only when `includeBase64` is true).
 
 `uri` and `type` are the only fields declared non-optional. `fileName`,
@@ -100,7 +102,10 @@ With the default `format: 'original'` the source format is preserved:
   only when a re-encode happens, and is ignored for lossless PNG output.
   Converting a source with transparency (PNG/HEIC alpha) to `'jpeg'` composites
   it onto a black background — JPEG has no alpha channel; use `'png'` when
-  transparency must survive.
+  transparency must survive. File types the library does not recognize (for
+  example AVIF) are currently treated as JPEG, so `format: 'jpeg'` returns them
+  unchanged rather than transcoding them; the guarantee covers the formats
+  listed in the [`Asset`](#asset) section.
 
 ## Camera
 
@@ -123,7 +128,7 @@ const result = await launchCamera({
 | `cameraType` | `'back' \| 'front'` | `'back'` | Honored on iOS; **best-effort on Android** (the system camera app may ignore it) |
 | `maxWidth` | `number` | `0` | `0` = no resize |
 | `maxHeight` | `number` | `0` | `0` = no resize |
-| `quality` | `number` | `1` | JPEG quality 0..1. Applies whenever the capture is re-encoded — always on iOS; on Android only when a resize is needed |
+| `quality` | `number` | `1` | JPEG quality 0..1. Applies whenever the capture is re-encoded — always on iOS; on Android only when a resize is needed; ignored when `format: 'png'` (PNG is lossless) |
 | `format` | `'original' \| 'jpeg' \| 'png'` | `'original'` | Output type of the capture; `'original'` = JPEG, as before |
 | `includeBase64` | `boolean` | `false` | adds `base64` to the captured asset |
 
