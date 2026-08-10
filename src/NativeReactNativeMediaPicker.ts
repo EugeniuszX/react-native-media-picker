@@ -26,6 +26,7 @@ export type NativeLibraryOptions = {
   maxHeight: number;
   quality: number;
   includeBase64: boolean;
+  format: string;
 };
 
 export type NativeCameraOptions = {
@@ -34,6 +35,7 @@ export type NativeCameraOptions = {
   maxHeight: number;
   quality: number;
   includeBase64: boolean;
+  format: string;
 };
 
 export interface Spec extends TurboModule {

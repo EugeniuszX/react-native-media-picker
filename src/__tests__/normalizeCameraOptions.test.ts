@@ -8,6 +8,7 @@ describe('normalizeCameraOptions', () => {
       maxHeight: 0,
       quality: 1,
       includeBase64: false,
+      format: 'original',
     });
   });
 
@@ -33,5 +34,15 @@ describe('normalizeCameraOptions', () => {
     expect(r.quality).toBe(1);
     expect(r.maxWidth).toBe(640);
     expect(r.maxHeight).toBe(0);
+  });
+
+  it('falls back to "original" for an invalid format', () => {
+    // @ts-expect-error testing runtime guard
+    expect(normalizeCameraOptions({ format: 'heic' }).format).toBe('original');
+  });
+
+  it('passes through "jpeg" and "png" formats', () => {
+    expect(normalizeCameraOptions({ format: 'jpeg' }).format).toBe('jpeg');
+    expect(normalizeCameraOptions({ format: 'png' }).format).toBe('png');
   });
 });

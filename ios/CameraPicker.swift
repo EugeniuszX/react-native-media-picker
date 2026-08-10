@@ -88,6 +88,7 @@ final class CameraPicker: NSObject, UIImagePickerControllerDelegate,
     DispatchQueue.global(qos: .userInitiated).async { [self] in
       let payload = processor.process(
         capturedImage: image,
+        requested: options.format,
         maxWidth: options.maxWidth,
         maxHeight: options.maxHeight,
         quality: options.quality,

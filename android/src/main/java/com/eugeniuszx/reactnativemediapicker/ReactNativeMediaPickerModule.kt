@@ -192,6 +192,7 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
               try {
                 processor.process(
                   uri,
+                  options.format,
                   options.maxWidth,
                   options.maxHeight,
                   options.quality,
@@ -201,6 +202,9 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
                 throw e
               } catch (e: Exception) {
                 Log.w(NAME, "failed to process $uri", e)
+                null
+              } catch (e: OutOfMemoryError) {
+                Log.w(NAME, "out of memory while processing $uri", e)
                 null
               }
             }
@@ -221,6 +225,11 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
         settleAndRelease(
           request,
           ResponseFactory.failure(PickerError.OTHERS, e.message ?: "processing error"),
+        )
+      } catch (e: OutOfMemoryError) {
+        settleAndRelease(
+          request,
+          ResponseFactory.failure(PickerError.OTHERS, "Out of memory while processing images"),
         )
       }
     }
@@ -251,6 +260,7 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
       try {
         val asset = processor.process(
           Uri.fromFile(file),
+          options.format,
           options.maxWidth,
           options.maxHeight,
           options.quality,
@@ -263,6 +273,11 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
         settleAndRelease(
           request,
           ResponseFactory.failure(PickerError.OTHERS, e.message ?: "processing error"),
+        )
+      } catch (e: OutOfMemoryError) {
+        settleAndRelease(
+          request,
+          ResponseFactory.failure(PickerError.OTHERS, "Out of memory while processing images"),
         )
       } finally {
         file.delete()

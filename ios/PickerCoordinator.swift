@@ -23,6 +23,7 @@ import UIKit
     maxWidth: Int,
     maxHeight: Int,
     quality: Double,
+    format: String,
     includeBase64: Bool,
     completion: @escaping ([[String: Any]]?, Bool, String?, String?) -> Void
   ) {
@@ -35,7 +36,8 @@ import UIKit
       maxWidth: maxWidth,
       maxHeight: maxHeight,
       quality: quality,
-      includeBase64: includeBase64
+      includeBase64: includeBase64,
+      format: RequestedFormat.from(rawValue: format)
     )
     LibraryPicker(options: options, processor: processor) {
       [weak self] assets, didCancel, error, message in
@@ -48,6 +50,7 @@ import UIKit
     maxWidth: Int,
     maxHeight: Int,
     quality: Double,
+    format: String,
     includeBase64: Bool,
     completion: @escaping ([[String: Any]]?, Bool, String?, String?) -> Void
   ) {
@@ -60,7 +63,8 @@ import UIKit
       maxWidth: maxWidth,
       maxHeight: maxHeight,
       quality: quality,
-      includeBase64: includeBase64
+      includeBase64: includeBase64,
+      format: RequestedFormat.from(rawValue: format)
     )
     let picker = CameraPicker(options: options, processor: processor) {
       [weak self] assets, didCancel, error, message in

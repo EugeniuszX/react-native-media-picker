@@ -17,6 +17,7 @@ internal class ImageProcessor(
 ) {
   fun process(
     uri: Uri,
+    format: RequestedFormat,
     maxWidth: Int,
     maxHeight: Int,
     quality: Int,
@@ -28,17 +29,18 @@ internal class ImageProcessor(
     val isAnimated = srcMime == "image/gif" ||
       (srcMime == "image/webp" && isAnimatedWebp(uri))
 
+    val output = OutputPlan.resolve(srcMime, format, isAnimated)
     val plan = DecodePlan.compute(
       pixelWidth = bounds.first,
       pixelHeight = bounds.second,
       orientation = orientation,
       maxWidth = maxWidth,
       maxHeight = maxHeight,
-      isAnimated = isAnimated,
+      isAnimated = output.preserveAnimation,
     )
 
-    return if (plan.needsTransform) {
-      transform(uri, srcMime, plan, orientation, quality, includeBase64)
+    return if (plan.needsTransform || output.forceReencode) {
+      transform(uri, output.target, plan, orientation, quality, includeBase64)
     } else {
       passthrough(uri, srcMime, plan, includeBase64)
     }
@@ -104,7 +106,7 @@ internal class ImageProcessor(
 
   private fun transform(
     uri: Uri,
-    srcMime: String,
+    target: MediaFormat.OutputFormat,
     plan: DecodePlan,
     orientation: ExifOrientation,
     quality: Int,
@@ -118,11 +120,10 @@ internal class ImageProcessor(
     bitmap = applyOrientation(bitmap, orientation)
     bitmap = scaleTo(bitmap, plan.targetWidth, plan.targetHeight)
 
-    val outFormat = MediaFormat.reencodeFormat(srcMime)
-    val outMime = MediaFormat.reencodeMime(outFormat)
+    val outMime = MediaFormat.reencodeMime(target)
     val outFile = tempFiles.createFile(MediaFormat.extensionForMime(outMime))
     FileOutputStream(outFile).use { output ->
-      if (!bitmap.compress(compressFormat(outFormat), quality, output)) {
+      if (!bitmap.compress(compressFormat(target), quality, output)) {
         bitmap.recycle()
         outFile.delete()
         throw IllegalStateException("Failed to encode image as $outMime")

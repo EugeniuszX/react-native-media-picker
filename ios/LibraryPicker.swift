@@ -93,6 +93,7 @@ final class LibraryPicker: NSObject, PHPickerViewControllerDelegate {
             let payload = self.processor.process(
               data: data,
               format: ImageFormat.from(uti: uti),
+              requested: self.options.format,
               maxWidth: self.options.maxWidth,
               maxHeight: self.options.maxHeight,
               quality: self.options.quality,
