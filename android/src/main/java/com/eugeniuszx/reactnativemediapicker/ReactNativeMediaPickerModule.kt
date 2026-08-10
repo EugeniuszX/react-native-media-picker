@@ -192,6 +192,7 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
               try {
                 processor.process(
                   uri,
+                  options.format,
                   options.maxWidth,
                   options.maxHeight,
                   options.quality,
@@ -251,6 +252,7 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
       try {
         val asset = processor.process(
           Uri.fromFile(file),
+          options.format,
           options.maxWidth,
           options.maxHeight,
           options.quality,

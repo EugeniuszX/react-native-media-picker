@@ -19,6 +19,7 @@ internal data class LibraryOptions(
   val maxHeight: Int,
   val quality: Int,
   val includeBase64: Boolean,
+  val format: RequestedFormat,
 ) {
   companion object {
     fun from(map: ReadableMap) = LibraryOptions(
@@ -27,6 +28,7 @@ internal data class LibraryOptions(
       maxHeight = map.getInt("maxHeight"),
       quality = toCompressQuality(map.getDouble("quality")),
       includeBase64 = map.getBoolean("includeBase64"),
+      format = RequestedFormat.from(map.getString("format")),
     )
   }
 }
@@ -37,6 +39,7 @@ internal data class CameraOptions(
   val maxHeight: Int,
   val quality: Int,
   val includeBase64: Boolean,
+  val format: RequestedFormat,
 ) {
   companion object {
     fun from(map: ReadableMap) = CameraOptions(
@@ -45,6 +48,7 @@ internal data class CameraOptions(
       maxHeight = map.getInt("maxHeight"),
       quality = toCompressQuality(map.getDouble("quality")),
       includeBase64 = map.getBoolean("includeBase64"),
+      format = RequestedFormat.from(map.getString("format")),
     )
   }
 }
