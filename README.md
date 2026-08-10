@@ -43,7 +43,7 @@ if (!result.didCancel && result.assets) {
 | `selectionLimit` | `number` | `1` | `0` = unlimited (see note below) |
 | `maxWidth` | `number` | `0` | `0` = no resize |
 | `maxHeight` | `number` | `0` | `0` = no resize |
-| `quality` | `number` | `1` | Re-encode quality 0..1 (JPEG/WebP/HEIC); ignored for lossless PNG and for animated images |
+| `quality` | `number` | `1` | Re-encode quality 0..1 (JPEG/WebP/HEIC); ignored for lossless PNG and for animated images (unless an explicit `format` forces a first-frame re-encode) |
 | `format` | `'original' \| 'jpeg' \| 'png'` | `'original'` | Guarantee the output file type; `'original'` preserves the source format (see below) |
 | `includeBase64` | `boolean` | `false` | adds `base64` to each asset |
 
