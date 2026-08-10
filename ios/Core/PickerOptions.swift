@@ -24,3 +24,13 @@ struct CameraOptions: Equatable {
   let quality: Double
   let includeBase64: Bool
 }
+
+enum RequestedFormat: String {
+  case original
+  case jpeg
+  case png
+
+  static func from(rawValue: String) -> RequestedFormat {
+    RequestedFormat(rawValue: rawValue) ?? .original
+  }
+}
