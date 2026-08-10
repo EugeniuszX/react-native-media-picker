@@ -44,6 +44,7 @@ if (!result.didCancel && result.assets) {
 | `maxWidth` | `number` | `0` | `0` = no resize |
 | `maxHeight` | `number` | `0` | `0` = no resize |
 | `quality` | `number` | `1` | Re-encode quality 0..1 (JPEG/WebP/HEIC); ignored for lossless PNG and for animated images |
+| `format` | `'original' \| 'jpeg' \| 'png'` | `'original'` | Guarantee the output file type; `'original'` preserves the source format (see below) |
 | `includeBase64` | `boolean` | `false` | adds `base64` to each asset |
 
 Only photos are picked. Video support is not implemented yet.
@@ -73,7 +74,7 @@ into the output, so buffer and reported size agree.
 
 ### Format handling
 
-The original format is preserved:
+With the default `format: 'original'` the source format is preserved:
 
 - **No resize needed** (no `maxWidth`/`maxHeight`, or the image is already within
   bounds): the original bytes are returned unchanged. `quality` only applies when
@@ -85,9 +86,21 @@ The original format is preserved:
   WebP becomes `image/jpeg` on iOS (no system WebP encoder).
 - **Animated images** (GIF, animated WebP): always returned untouched;
   `maxWidth`/`maxHeight`/`quality` are ignored so the animation survives.
-- **Camera captures** are always `image/jpeg`. On iOS the capture arrives already
-  decoded, so it is always re-encoded; on Android the capture file is passed
-  through untouched when no resize is needed.
+- **Camera captures** are `image/jpeg` unless `format: 'png'` is requested. On iOS
+  the capture arrives already decoded, so it is always re-encoded; on Android the
+  capture file is passed through untouched when no resize is needed. With
+  `format: 'png'` on Android the capture file is re-encoded even when no resize is
+  needed.
+- **Explicit `format: 'jpeg'` / `'png'`:** guarantees the output type. A source
+  already in the requested format (and not animated) is passed through
+  untouched — `quality` is not applied to it. Anything else is re-encoded even
+  when no resize is needed. Animated images (GIF, animated WebP) are converted
+  from their **first frame** — the animation is lost, and since it is lost
+  anyway, `maxWidth`/`maxHeight` apply to that frame. `quality` still applies
+  only when a re-encode happens, and is ignored for lossless PNG output.
+  Converting a source with transparency (PNG/HEIC alpha) to `'jpeg'` composites
+  it onto a black background — JPEG has no alpha channel; use `'png'` when
+  transparency must survive.
 
 ## Camera
 
@@ -111,6 +124,7 @@ const result = await launchCamera({
 | `maxWidth` | `number` | `0` | `0` = no resize |
 | `maxHeight` | `number` | `0` | `0` = no resize |
 | `quality` | `number` | `1` | JPEG quality 0..1. Applies whenever the capture is re-encoded — always on iOS; on Android only when a resize is needed |
+| `format` | `'original' \| 'jpeg' \| 'png'` | `'original'` | Output type of the capture; `'original'` = JPEG, as before |
 | `includeBase64` | `boolean` | `false` | adds `base64` to the captured asset |
 
 ### Camera permissions
