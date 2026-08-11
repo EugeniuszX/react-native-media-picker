@@ -68,7 +68,10 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
     }
 
     try {
-      activity.startActivityForResult(intents.imageLibrary(parsed.selectionLimit), REQUEST_CODE)
+      activity.startActivityForResult(
+        intents.mediaLibrary(parsed.selectionLimit, parsed.mediaType),
+        REQUEST_CODE,
+      )
     } catch (e: Throwable) {
       pending.take()
       request.settle(ResponseFactory.failure(PickerError.OTHERS, e.message ?: "launch error"))

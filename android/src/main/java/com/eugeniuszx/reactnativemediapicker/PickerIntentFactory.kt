@@ -7,10 +7,10 @@ import android.provider.MediaStore
 import androidx.activity.result.contract.ActivityResultContracts
 
 internal class PickerIntentFactory(private val context: Context) {
-  fun imageLibrary(selectionLimit: Int): Intent =
+  fun mediaLibrary(selectionLimit: Int, mediaType: RequestedMediaType): Intent =
     if (ActivityResultContracts.PickVisualMedia.isPhotoPickerAvailable(context)) {
       Intent(MediaStore.ACTION_PICK_IMAGES).apply {
-        type = "image/*"
+        LibraryIntentPlan.pickImagesMimeType(mediaType)?.let { type = it }
         if (selectionLimit != 1) {
           val systemMax = MediaStore.getPickImagesMaxLimit()
           val max = if (selectionLimit == 0) systemMax else selectionLimit.coerceAtMost(systemMax)
@@ -18,8 +18,12 @@ internal class PickerIntentFactory(private val context: Context) {
         }
       }
     } else {
+      val mimeTypes = LibraryIntentPlan.getContentMimeTypes(mediaType)
       Intent(Intent.ACTION_GET_CONTENT).apply {
-        type = "image/*"
+        type = if (mimeTypes.size == 1) mimeTypes.first() else "*/*"
+        if (mimeTypes.size > 1) {
+          putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes.toTypedArray())
+        }
         addCategory(Intent.CATEGORY_OPENABLE)
         if (selectionLimit != 1) {
           putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
