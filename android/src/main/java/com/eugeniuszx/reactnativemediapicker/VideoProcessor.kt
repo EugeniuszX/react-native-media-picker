@@ -28,10 +28,9 @@ internal class VideoProcessor(
     val retriever = MediaMetadataRetriever()
     try {
       retriever.setDataSource(file.path)
-      durationSeconds = retriever
-        .extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-        ?.toLongOrNull()
-        ?.let { it / 1000.0 }
+      durationSeconds = MediaFormat.durationSecondsFrom(
+        retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+      )
       val rawWidth = retriever
         .extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
         ?.toIntOrNull() ?: 0

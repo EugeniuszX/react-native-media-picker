@@ -71,6 +71,12 @@ internal object MediaFormat {
     else -> "video/mp4"
   }
 
+  /** Milliseconds as reported by [android.media.MediaMetadataRetriever] to seconds.
+   * Returns null when the value is missing, unparsable or not positive, so a
+   * duration that could not be determined stays absent from the payload. */
+  fun durationSecondsFrom(raw: String?): Double? =
+    raw?.toLongOrNull()?.let { it / 1000.0 }?.takeIf { it > 0 }
+
   fun extensionForVideoMime(mime: String): String = when (mime) {
     "video/quicktime" -> "mov"
     "video/webm" -> "webm"

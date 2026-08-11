@@ -2,6 +2,7 @@ package com.eugeniuszx.reactnativemediapicker
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -144,6 +145,18 @@ class MediaFormatTest {
     assertFalse(MediaFormat.isVideoHeader(ByteArray(0)))
     assertFalse(MediaFormat.isVideoHeader(ByteArray(3)))
     assertFalse(MediaFormat.isVideoHeader(ftypHeader("isom").copyOf(11)))
+  }
+
+  @Test fun convertsPositiveDurationMillisToSeconds() {
+    assertEquals(10.0, MediaFormat.durationSecondsFrom("10000")!!, 0.0)
+    assertEquals(0.5, MediaFormat.durationSecondsFrom("500")!!, 0.0)
+  }
+
+  @Test fun omitsNonPositiveOrUnparsableDurations() {
+    assertNull(MediaFormat.durationSecondsFrom("0"))
+    assertNull(MediaFormat.durationSecondsFrom("-100"))
+    assertNull(MediaFormat.durationSecondsFrom("garbage"))
+    assertNull(MediaFormat.durationSecondsFrom(null))
   }
 
   private fun ftypHeader(brand: String): ByteArray {
