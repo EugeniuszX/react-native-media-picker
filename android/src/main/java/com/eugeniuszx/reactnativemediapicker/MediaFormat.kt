@@ -3,6 +3,8 @@ package com.eugeniuszx.reactnativemediapicker
 internal object MediaFormat {
   enum class OutputFormat { JPEG, PNG, WEBP }
 
+  private val imageFtypBrands = listOf("hei", "hevc", "mif1", "msf1", "avif", "avis")
+
   fun normalizeMime(mime: String?): String = when (mime?.lowercase()) {
     "image/jpeg", "image/jpg" -> "image/jpeg"
     "image/png" -> "image/png"
@@ -44,6 +46,19 @@ internal object MediaFormat {
       header[14].toInt() != '8'.code || header[15].toInt() != 'X'.code
     ) return false
     return (header[20].toInt() and 0xFF and 0x02) != 0
+  }
+
+  fun isVideoHeader(header: ByteArray): Boolean {
+    if (header.size < 4) return false
+    if (header[0].toInt() and 0xFF == 0x1A && header[1].toInt() and 0xFF == 0x45 &&
+      header[2].toInt() and 0xFF == 0xDF && header[3].toInt() and 0xFF == 0xA3
+    ) return true
+    if (header.size < 12) return false
+    if (header[4].toInt() != 'f'.code || header[5].toInt() != 't'.code ||
+      header[6].toInt() != 'y'.code || header[7].toInt() != 'p'.code
+    ) return false
+    val brand = String(header, 8, 4, Charsets.ISO_8859_1).lowercase()
+    return imageFtypBrands.none { brand.startsWith(it) }
   }
 
   fun isVideoMime(mime: String?): Boolean =

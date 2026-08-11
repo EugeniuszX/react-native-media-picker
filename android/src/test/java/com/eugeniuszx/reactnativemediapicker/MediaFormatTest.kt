@@ -103,4 +103,54 @@ class MediaFormatTest {
     assertEquals("webm", MediaFormat.extensionForVideoMime("video/webm"))
     assertEquals("3gp", MediaFormat.extensionForVideoMime("video/3gpp"))
   }
+
+  @Test fun detectsIsoBmffVideoHeaders() {
+    assertTrue(MediaFormat.isVideoHeader(ftypHeader("isom")))
+    assertTrue(MediaFormat.isVideoHeader(ftypHeader("iso2")))
+    assertTrue(MediaFormat.isVideoHeader(ftypHeader("mp42")))
+    assertTrue(MediaFormat.isVideoHeader(ftypHeader("qt  ")))
+    assertTrue(MediaFormat.isVideoHeader(ftypHeader("3gp4")))
+    assertTrue(MediaFormat.isVideoHeader(ftypHeader("M4V ")))
+  }
+
+  @Test fun detectsMatroskaVideoHeader() {
+    val header = ByteArray(16)
+    header[0] = 0x1A
+    header[1] = 0x45
+    header[2] = 0xDF.toByte()
+    header[3] = 0xA3.toByte()
+    assertTrue(MediaFormat.isVideoHeader(header))
+  }
+
+  @Test fun treatsHeicAndAvifFtypBrandsAsNotVideo() {
+    assertFalse(MediaFormat.isVideoHeader(ftypHeader("heic")))
+    assertFalse(MediaFormat.isVideoHeader(ftypHeader("heix")))
+    assertFalse(MediaFormat.isVideoHeader(ftypHeader("hevc")))
+    assertFalse(MediaFormat.isVideoHeader(ftypHeader("mif1")))
+    assertFalse(MediaFormat.isVideoHeader(ftypHeader("msf1")))
+    assertFalse(MediaFormat.isVideoHeader(ftypHeader("avif")))
+    assertFalse(MediaFormat.isVideoHeader(ftypHeader("avis")))
+  }
+
+  @Test fun treatsImageHeadersAsNotVideo() {
+    val jpeg = ByteArray(16)
+    jpeg[0] = 0xFF.toByte()
+    jpeg[1] = 0xD8.toByte()
+    jpeg[2] = 0xFF.toByte()
+    assertFalse(MediaFormat.isVideoHeader(jpeg))
+  }
+
+  @Test fun treatsShortOrEmptyHeaderAsNotVideo() {
+    assertFalse(MediaFormat.isVideoHeader(ByteArray(0)))
+    assertFalse(MediaFormat.isVideoHeader(ByteArray(3)))
+    assertFalse(MediaFormat.isVideoHeader(ftypHeader("isom").copyOf(11)))
+  }
+
+  private fun ftypHeader(brand: String): ByteArray {
+    val header = ByteArray(16)
+    header[3] = 0x18
+    "ftyp".forEachIndexed { i, c -> header[4 + i] = c.code.toByte() }
+    brand.forEachIndexed { i, c -> header[8 + i] = c.code.toByte() }
+    return header
+  }
 }
