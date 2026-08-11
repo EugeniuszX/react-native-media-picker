@@ -9,6 +9,7 @@ final class LibraryPicker: NSObject, PHPickerViewControllerDelegate {
 
   private let options: LibraryOptions
   private let processor: ImageProcessor
+  private let videoProcessor: VideoProcessor
   private let finish: ([AssetPayload]?, Bool, PickerError?, String?) -> Void
   /// Kept alive until completion — PHPickerViewController holds its delegate weakly.
   private var selfReference: LibraryPicker?
@@ -16,17 +17,23 @@ final class LibraryPicker: NSObject, PHPickerViewControllerDelegate {
   init(
     options: LibraryOptions,
     processor: ImageProcessor,
+    videoProcessor: VideoProcessor,
     finish: @escaping ([AssetPayload]?, Bool, PickerError?, String?) -> Void
   ) {
     self.options = options
     self.processor = processor
+    self.videoProcessor = videoProcessor
     self.finish = finish
     super.init()
   }
 
   func present() {
     var configuration = PHPickerConfiguration()
-    configuration.filter = .images
+    switch options.mediaType {
+    case .photo: configuration.filter = .images
+    case .video: configuration.filter = .videos
+    case .mixed: configuration.filter = .any(of: [.images, .videos])
+    }
     configuration.selectionLimit = options.selectionLimit
 
     selfReference = self
@@ -67,6 +74,31 @@ final class LibraryPicker: NSObject, PHPickerViewControllerDelegate {
     DispatchQueue.global(qos: .userInitiated).async { [self] in
       for (index, result) in results.enumerated() {
         let provider = result.itemProvider
+        if let movieUTI = provider.registeredTypeIdentifiers.first(where: {
+          UTType($0)?.conforms(to: .movie) == true
+        }) {
+          semaphore.wait()
+          group.enter()
+          provider.loadFileRepresentation(forTypeIdentifier: movieUTI) { url, error in
+            defer {
+              semaphore.signal()
+              group.leave()
+            }
+            if let error {
+              NSLog(
+                "[ReactNativeMediaPicker] failed to load video %d: %@", index,
+                error.localizedDescription)
+              return
+            }
+            guard let url,
+              let payload = self.videoProcessor.process(sourceURL: url, uti: movieUTI)
+            else { return }
+            lock.lock()
+            slots[index] = payload
+            lock.unlock()
+          }
+          continue
+        }
         guard
           let uti = provider.registeredTypeIdentifiers.first(where: {
             UTType($0)?.conforms(to: .image) == true

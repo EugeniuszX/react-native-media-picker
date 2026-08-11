@@ -7,11 +7,13 @@ import UIKit
   private let session = PickerSession<Completion>()
   private let tempFiles: TempFileStore
   private let processor: ImageProcessor
+  private let videoProcessor: VideoProcessor
 
   @objc public override init() {
     let store = TempFileStore()
     tempFiles = store
     processor = ImageProcessor(tempFiles: store)
+    videoProcessor = VideoProcessor(tempFiles: store)
     super.init()
     DispatchQueue.global(qos: .utility).async {
       store.removeFiles(olderThan: TempFileStore.autoSweepAge)
@@ -24,6 +26,7 @@ import UIKit
     maxHeight: Int,
     quality: Double,
     format: String,
+    mediaType: String,
     includeBase64: Bool,
     completion: @escaping ([[String: Any]]?, Bool, String?, String?) -> Void
   ) {
@@ -37,9 +40,10 @@ import UIKit
       maxHeight: maxHeight,
       quality: quality,
       includeBase64: includeBase64,
-      format: RequestedFormat.from(rawValue: format)
+      format: RequestedFormat.from(rawValue: format),
+      mediaType: RequestedMediaType.from(rawValue: mediaType)
     )
-    LibraryPicker(options: options, processor: processor) {
+    LibraryPicker(options: options, processor: processor, videoProcessor: videoProcessor) {
       [weak self] assets, didCancel, error, message in
       self?.finish(assets, didCancel, error, message)
     }.present()
