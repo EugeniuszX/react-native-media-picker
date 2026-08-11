@@ -8,6 +8,7 @@ struct AssetPayload: Equatable {
   let width: Int
   let height: Int
   let base64: String?
+  var duration: Double? = nil
 
   var dictionary: [String: Any] {
     var dict: [String: Any] = [
@@ -20,6 +21,9 @@ struct AssetPayload: Equatable {
     ]
     if let base64 {
       dict["base64"] = base64
+    }
+    if let duration {
+      dict["duration"] = duration
     }
     return dict
   }

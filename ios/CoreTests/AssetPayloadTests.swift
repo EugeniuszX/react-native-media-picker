@@ -35,6 +35,33 @@ final class AssetPayloadTests: XCTestCase {
     XCTAssertEqual(dict.keys.count, 7)
   }
 
+  func testDictionaryIncludesDurationWhenSet() {
+    let payload = AssetPayload(
+      uri: "file:///tmp/a.mp4",
+      mime: "video/mp4",
+      fileName: "a.mp4",
+      fileSize: 10,
+      width: 1920,
+      height: 1080,
+      base64: nil,
+      duration: 12.5
+    )
+    XCTAssertEqual(payload.dictionary["duration"] as? Double, 12.5)
+  }
+
+  func testDictionaryOmitsDurationWhenNil() {
+    let payload = AssetPayload(
+      uri: "file:///tmp/a.jpg",
+      mime: "image/jpeg",
+      fileName: "a.jpg",
+      fileSize: 10,
+      width: 100,
+      height: 100,
+      base64: nil
+    )
+    XCTAssertNil(payload.dictionary["duration"])
+  }
+
   func testErrorCodesMatchThePublicContract() {
     XCTAssertEqual(PickerError.permission.code, "permission")
     XCTAssertEqual(PickerError.cameraUnavailable.code, "camera_unavailable")
