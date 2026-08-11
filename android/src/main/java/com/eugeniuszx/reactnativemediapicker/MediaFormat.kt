@@ -45,4 +45,21 @@ internal object MediaFormat {
     ) return false
     return (header[20].toInt() and 0xFF and 0x02) != 0
   }
+
+  fun isVideoMime(mime: String?): Boolean =
+    mime?.lowercase()?.startsWith("video/") == true
+
+  fun normalizeVideoMime(mime: String?): String = when (mime?.lowercase()) {
+    "video/quicktime" -> "video/quicktime"
+    "video/webm" -> "video/webm"
+    "video/3gpp" -> "video/3gpp"
+    else -> "video/mp4"
+  }
+
+  fun extensionForVideoMime(mime: String): String = when (mime) {
+    "video/quicktime" -> "mov"
+    "video/webm" -> "webm"
+    "video/3gpp" -> "3gp"
+    else -> "mp4"
+  }
 }

@@ -80,4 +80,27 @@ class MediaFormatTest {
   @Test fun gifFallsBackToJpegOnReencode() {
     assertEquals(MediaFormat.OutputFormat.JPEG, MediaFormat.reencodeFormat("image/gif"))
   }
+
+  @Test fun detectsVideoMimes() {
+    assertTrue(MediaFormat.isVideoMime("video/mp4"))
+    assertTrue(MediaFormat.isVideoMime("VIDEO/QUICKTIME"))
+    assertFalse(MediaFormat.isVideoMime("image/jpeg"))
+    assertFalse(MediaFormat.isVideoMime(null))
+  }
+
+  @Test fun normalizesVideoMimes() {
+    assertEquals("video/mp4", MediaFormat.normalizeVideoMime("video/mp4"))
+    assertEquals("video/quicktime", MediaFormat.normalizeVideoMime("video/quicktime"))
+    assertEquals("video/webm", MediaFormat.normalizeVideoMime("video/webm"))
+    assertEquals("video/3gpp", MediaFormat.normalizeVideoMime("video/3gpp"))
+    assertEquals("video/mp4", MediaFormat.normalizeVideoMime("video/x-matroska"))
+    assertEquals("video/mp4", MediaFormat.normalizeVideoMime(null))
+  }
+
+  @Test fun mapsVideoMimeToExtension() {
+    assertEquals("mp4", MediaFormat.extensionForVideoMime("video/mp4"))
+    assertEquals("mov", MediaFormat.extensionForVideoMime("video/quicktime"))
+    assertEquals("webm", MediaFormat.extensionForVideoMime("video/webm"))
+    assertEquals("3gp", MediaFormat.extensionForVideoMime("video/3gpp"))
+  }
 }

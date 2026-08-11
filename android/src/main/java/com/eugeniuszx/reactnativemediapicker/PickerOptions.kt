@@ -13,6 +13,21 @@ internal enum class CameraFacing {
   }
 }
 
+internal enum class RequestedMediaType {
+  PHOTO,
+  VIDEO,
+  MIXED,
+  ;
+
+  companion object {
+    fun from(raw: String?): RequestedMediaType = when (raw) {
+      "video" -> VIDEO
+      "mixed" -> MIXED
+      else -> PHOTO
+    }
+  }
+}
+
 internal data class LibraryOptions(
   val selectionLimit: Int,
   val maxWidth: Int,
@@ -20,6 +35,7 @@ internal data class LibraryOptions(
   val quality: Int,
   val includeBase64: Boolean,
   val format: RequestedFormat,
+  val mediaType: RequestedMediaType,
 ) {
   companion object {
     fun from(map: ReadableMap) = LibraryOptions(
@@ -29,6 +45,7 @@ internal data class LibraryOptions(
       quality = toCompressQuality(map.getDouble("quality")),
       includeBase64 = map.getBoolean("includeBase64"),
       format = RequestedFormat.from(map.getString("format")),
+      mediaType = RequestedMediaType.from(map.getString("mediaType")),
     )
   }
 }
