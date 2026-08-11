@@ -17,6 +17,7 @@ final class VideoProcessor {
     } catch {
       NSLog(
         "[ReactNativeMediaPicker] failed to copy video: %@", error.localizedDescription)
+      try? FileManager.default.removeItem(at: destination)
       return nil
     }
 
