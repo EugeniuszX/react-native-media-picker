@@ -74,9 +74,11 @@ final class LibraryPicker: NSObject, PHPickerViewControllerDelegate {
     DispatchQueue.global(qos: .userInitiated).async { [self] in
       for (index, result) in results.enumerated() {
         let provider = result.itemProvider
-        if let movieUTI = provider.registeredTypeIdentifiers.first(where: {
-          UTType($0)?.conforms(to: .movie) == true
-        }) {
+        if options.mediaType != .photo,
+          let movieUTI = provider.registeredTypeIdentifiers.first(where: {
+            UTType($0)?.conforms(to: .movie) == true
+          })
+        {
           semaphore.wait()
           group.enter()
           provider.loadFileRepresentation(forTypeIdentifier: movieUTI) { url, error in

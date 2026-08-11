@@ -194,7 +194,7 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
           async {
             gate.withPermit {
               try {
-                if (isVideoContent(uri)) {
+                if (options.mediaType != RequestedMediaType.PHOTO && isVideoContent(uri)) {
                   videoProcessor.process(uri)
                 } else {
                   processor.process(
