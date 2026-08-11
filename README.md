@@ -46,7 +46,7 @@ if (!result.didCancel && result.assets) {
 | `mediaType` | `'photo' \| 'video' \| 'mixed'` | `'photo'` | What the picker offers; videos are returned as-is (see [Video assets](#video-assets)) |
 | `maxWidth` | `number` | `0` | `0` = no resize; ignored for video assets |
 | `maxHeight` | `number` | `0` | `0` = no resize; ignored for video assets |
-| `quality` | `number` | `1` | Re-encode quality 0..1 (JPEG/WebP/HEIC); ignored for lossless PNG, for animated images (unless an explicit `format` forces a first-frame re-encode) and for video assets |
+| `quality` | `number` | `1` | Re-encode quality 0..1 (JPEG/WebP/HEIC); ignored for lossless PNG, for video assets, and for animated images (unless an explicit `format` forces a first-frame re-encode) |
 | `format` | `'original' \| 'jpeg' \| 'png'` | `'original'` | Guarantee the output file type; `'original'` preserves the source format (see below); ignored for video assets |
 | `includeBase64` | `boolean` | `false` | adds `base64` to each asset; ignored for video assets |
 
@@ -117,36 +117,46 @@ With the default `format: 'original'` the source format is preserved:
 
 ### Video assets
 
-Videos are always passed through untouched: the picked file is copied
-byte-for-byte into a temp file and returned as-is. `maxWidth`, `maxHeight`,
-`quality`, `format` and `includeBase64` are ignored for video assets — there
-is no transcoding, and base64 for videos is deliberately unsupported.
+Videos are always passed through untouched: the file the system hands over is
+copied byte-for-byte into a temp file and returned as-is. `maxWidth`,
+`maxHeight`, `quality`, `format` and `includeBase64` are ignored for video
+assets — the library never transcodes, and base64 for videos is deliberately
+unsupported. On iOS the copied bytes are the representation PHPicker exports
+from the photo library, and the system may re-encode the asset while producing
+it, so they are not guaranteed to be identical to the original file in the
+library.
 
 Each video asset carries `duration` (seconds), `width`/`height` (displayed
 axes — rotation metadata is applied; `0` means the metadata could not be
 read) and `fileSize`. A failure to read metadata does not fail the asset:
 `duration` is then simply absent, and `width`/`height` come back as `0`.
 
-`type` describes the container that was copied: `video/mp4`,
-`video/quicktime`, `video/webm` or `video/3gpp`, and `fileName`'s extension
-matches it (`mp4`, `mov`, `webm`, `3gp`). Containers the library does not
-recognize are labeled `video/mp4` — the bytes are still passed through
-untouched, exactly as with unrecognized image types under
-[Format handling](#format-handling). iOS only ever reports `video/mp4` or
-`video/quicktime`; `video/webm` and `video/3gpp` come from Android.
+`type` is derived from the mime the system reports for the picked item:
+`video/mp4`, `video/quicktime`, `video/webm` or `video/3gpp`, and `fileName`'s
+extension matches it (`mp4`, `mov`, `webm`, `3gp`). That is also why a mime the
+library does not recognize — or a missing one — is labeled `video/mp4`; the
+bytes are still passed through untouched, exactly as with unrecognized image
+types under [Format handling](#format-handling). iOS only ever reports
+`video/mp4` or `video/quicktime`; `video/webm` and `video/3gpp` come from
+Android.
 
 Platform notes:
 
 - **iOS:** videos stored in iCloud are downloaded by the system during the
-  pick; large videos can take a while and there is no progress reporting.
-  Slo-mo videos arrive as regular movies. A Live Photo is returned as its
-  still image (also under `mediaType: 'mixed'`) — the motion part is not
+  pick; large videos can take a while and there is no progress reporting. The
+  pick stays in flight for the whole download — and, since only one pick may run
+  at a time, new `launchImageLibrary`/`launchCamera` calls are rejected until it
+  finishes. Slo-mo videos arrive as regular movies. A Live Photo is returned as
+  its still image (also under `mediaType: 'mixed'`) — the motion part is not
   extracted.
 - **Android:** on devices without the system Photo Picker the fallback
-  `ACTION_GET_CONTENT` chooser is used, same as for photos. Some providers
-  report no mime type or a generic one on that path, so the library sniffs the
-  file header (ISO-BMFF / Matroska) to tell a video from an image instead of
-  trusting the provider.
+  `ACTION_GET_CONTENT` chooser is used, same as for photos. The provider's mime
+  type is trusted when it reports one; when it reports none or a generic one,
+  the library falls back to sniffing the file header (ISO-BMFF / Matroska) to
+  tell a video from an image. With `mediaType: 'mixed'` that chooser is opened
+  with type `*/*` (images and videos are only a hint, passed as
+  `EXTRA_MIME_TYPES`), so it may also offer non-media files — a non-media pick
+  fails to process and is dropped like any other failed item.
 
 Temp-file handling is identical to photos: the same `rn-media-picker`
 directory, the same 24-hour sweep, and `cleanTempFiles()` deletes video temp
