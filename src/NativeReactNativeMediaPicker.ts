@@ -8,6 +8,7 @@ export type Asset = {
   fileSize?: number;
   width?: number;
   height?: number;
+  duration?: number;
   base64?: string;
 };
 
@@ -27,6 +28,7 @@ export type NativeLibraryOptions = {
   quality: number;
   includeBase64: boolean;
   format: string;
+  mediaType: string;
 };
 
 export type NativeCameraOptions = {
