@@ -14,6 +14,7 @@ import {
   launchImageLibrary,
   type Asset,
   type CameraType,
+  type MediaType,
 } from '@eugeniuszx/react-native-media-picker';
 
 export default function App() {
@@ -30,6 +31,26 @@ export default function App() {
       quality: 0.8,
       includeBase64,
     })
+      .then((res) => {
+        if (res.didCancel) {
+          setStatus('cancelled');
+          return;
+        }
+        if (res.errorCode) {
+          setStatus(`error: ${res.errorCode} ${res.errorMessage ?? ''}`);
+          return;
+        }
+        setStatus(`got ${res.assets?.length ?? 0} asset(s)`);
+        setAssets(res.assets ?? []);
+      })
+      .catch((e: unknown) => {
+        setStatus(`threw: ${String(e)}`);
+      });
+  };
+
+  const pickMedia = (mediaType: MediaType) => {
+    setStatus(`picking ${mediaType}…`);
+    launchImageLibrary({ selectionLimit: 3, mediaType })
       .then((res) => {
         if (res.didCancel) {
           setStatus('cancelled');
@@ -90,6 +111,8 @@ export default function App() {
         <Button title="Pick single" onPress={() => pick(1, false)} />
         <Button title="Pick multiple (5)" onPress={() => pick(5, false)} />
         <Button title="Pick single + base64" onPress={() => pick(1, true)} />
+        <Button title="Pick videos (3)" onPress={() => pickMedia('video')} />
+        <Button title="Pick mixed (3)" onPress={() => pickMedia('mixed')} />
         <Button title={`Take photo (${facing})`} onPress={capture} />
         <Button
           title="Toggle front/back"
@@ -99,7 +122,13 @@ export default function App() {
         <Text style={styles.status}>{status}</Text>
         {assets.map((a) => (
           <View key={a.uri} style={styles.card}>
-            <Image source={{ uri: a.uri }} style={styles.image} />
+            {a.type.startsWith('image/') ? (
+              <Image source={{ uri: a.uri }} style={styles.image} />
+            ) : (
+              <Text style={styles.status}>{`🎬 video${
+                a.duration != null ? ` • ${a.duration.toFixed(1)}s` : ''
+              }`}</Text>
+            )}
             <Text>{`${a.type} • ${a.width}x${a.height} • ${a.fileSize ?? '?'}B`}</Text>
             <Text numberOfLines={1}>{a.uri}</Text>
             <Text>{`base64: ${a.base64 ? `${a.base64.length} chars` : 'none'}`}</Text>
