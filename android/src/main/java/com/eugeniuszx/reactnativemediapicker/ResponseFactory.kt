@@ -32,5 +32,6 @@ internal object ResponseFactory {
     putInt("width", asset.width)
     putInt("height", asset.height)
     asset.base64?.let { putString("base64", it) }
+    asset.durationSeconds?.let { putDouble("duration", it) }
   }
 }

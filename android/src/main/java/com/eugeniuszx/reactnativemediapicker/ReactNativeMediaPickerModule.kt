@@ -32,6 +32,7 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
   private val tempFiles =
     TempFileStore(File(reactContext.cacheDir, TempFileStore.DIRECTORY_NAME))
   private val processor = ImageProcessor(reactContext.contentResolver, tempFiles)
+  private val videoProcessor = VideoProcessor(reactContext.contentResolver, tempFiles)
 
   init {
     reactContext.addActivityEventListener(this)
@@ -193,14 +194,19 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
           async {
             gate.withPermit {
               try {
-                processor.process(
-                  uri,
-                  options.format,
-                  options.maxWidth,
-                  options.maxHeight,
-                  options.quality,
-                  options.includeBase64,
-                )
+                val mime = reactContext.contentResolver.getType(uri)
+                if (MediaFormat.isVideoMime(mime)) {
+                  videoProcessor.process(uri)
+                } else {
+                  processor.process(
+                    uri,
+                    options.format,
+                    options.maxWidth,
+                    options.maxHeight,
+                    options.quality,
+                    options.includeBase64,
+                  )
+                }
               } catch (e: CancellationException) {
                 throw e
               } catch (e: Exception) {

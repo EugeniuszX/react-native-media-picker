@@ -8,4 +8,5 @@ internal data class AssetPayload(
   val width: Int,
   val height: Int,
   val base64: String?,
+  val durationSeconds: Double? = null,
 )
