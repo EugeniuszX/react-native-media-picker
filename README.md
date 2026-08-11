@@ -4,7 +4,8 @@
 [![npm downloads](https://img.shields.io/npm/dm/@eugeniuszx/react-native-media-picker.svg)](https://www.npmjs.com/package/@eugeniuszx/react-native-media-picker)
 [![license](https://img.shields.io/npm/l/@eugeniuszx/react-native-media-picker.svg)](./LICENSE)
 
-Cross-platform media picker for React Native (New Architecture). Gallery access
+Cross-platform media picker for React Native (New Architecture). Picks photos and
+videos from the gallery, and captures photos with the camera. Gallery access
 requires **no runtime permissions** on iOS (PHPicker) or Android (Photo Picker).
 
 📦 **npm:** https://www.npmjs.com/package/@eugeniuszx/react-native-media-picker
@@ -25,6 +26,7 @@ import { launchImageLibrary } from '@eugeniuszx/react-native-media-picker';
 
 const result = await launchImageLibrary({
   selectionLimit: 1, // 0 = unlimited
+  mediaType: 'photo', // 'photo' | 'video' | 'mixed'
   maxWidth: 640,
   maxHeight: 640,
   quality: 0.8, // 0..1
@@ -41,13 +43,15 @@ if (!result.didCancel && result.assets) {
 | Option | Type | Default | Notes |
 |---|---|---|---|
 | `selectionLimit` | `number` | `1` | `0` = unlimited (see note below) |
-| `maxWidth` | `number` | `0` | `0` = no resize |
-| `maxHeight` | `number` | `0` | `0` = no resize |
-| `quality` | `number` | `1` | Re-encode quality 0..1 (JPEG/WebP/HEIC); ignored for lossless PNG and for animated images (unless an explicit `format` forces a first-frame re-encode) |
-| `format` | `'original' \| 'jpeg' \| 'png'` | `'original'` | Guarantee the output file type; `'original'` preserves the source format (see below) |
-| `includeBase64` | `boolean` | `false` | adds `base64` to each asset |
+| `mediaType` | `'photo' \| 'video' \| 'mixed'` | `'photo'` | What the picker offers; videos are returned as-is (see [Video assets](#video-assets)) |
+| `maxWidth` | `number` | `0` | `0` = no resize; ignored for video assets |
+| `maxHeight` | `number` | `0` | `0` = no resize; ignored for video assets |
+| `quality` | `number` | `1` | Re-encode quality 0..1 (JPEG/WebP/HEIC); ignored for lossless PNG, for animated images (unless an explicit `format` forces a first-frame re-encode) and for video assets |
+| `format` | `'original' \| 'jpeg' \| 'png'` | `'original'` | Guarantee the output file type; `'original'` preserves the source format (see below); ignored for video assets |
+| `includeBase64` | `boolean` | `false` | adds `base64` to each asset; ignored for video assets |
 
-Only photos are picked. Video support is not implemented yet.
+Videos can be picked with `mediaType: 'video'` (or alongside photos with
+`'mixed'`) — see [Video assets](#video-assets).
 
 On Android, "unlimited" is capped by the system Photo Picker:
 `selectionLimit: 0` requests `MediaStore.getPickImagesMaxLimit()`, and any larger
@@ -57,22 +61,26 @@ explicit limit is clamped to it. iOS has no such cap.
 
 Each picked item resolves to: `uri` (a `file://` path to a temp file), `type`
 (the output mime, matching the file actually written — `image/jpeg`,
-`image/png`, `image/heic`, `image/gif`, or `image/webp`; see
-[Format handling](#format-handling) for how it is derived), `fileName`
-(extension matches `type`), `fileSize`, `width`,
-`height`, and `base64` (only when `includeBase64` is true).
+`image/png`, `image/heic`, `image/gif`, or `image/webp` for photos, and
+`video/mp4`, `video/quicktime`, `video/webm` or `video/3gpp` for videos; see
+[Format handling](#format-handling) and [Video assets](#video-assets) for how
+it is derived), `fileName` (extension matches `type`), `fileSize`, `width`,
+`height`, `duration` (seconds, video assets only — absent for photos), and
+`base64` (only when `includeBase64` is true, photos only).
 
 `uri` and `type` are the only fields declared non-optional. `fileName`,
 `fileSize`, `width` and `height` are typed `?:`, so TypeScript makes you narrow
 them. Both native modules do populate all four today, but `width` and `height`
-are reported as `0` when the image metadata cannot be read — treat `0` as
-"unknown", not as a real dimension.
+are reported as `0` when the image or video metadata cannot be read — treat `0`
+as "unknown", not as a real dimension.
 
 `width` and `height` are the dimensions **as displayed** — the EXIF orientation
 is already applied. For an image whose orientation is a quarter turn they are
 therefore swapped relative to the stored pixel buffer when the original bytes are
 passed through untouched; when a resize forces a re-encode the rotation is baked
-into the output, so buffer and reported size agree.
+into the output, so buffer and reported size agree. For videos the rotation
+metadata of the video track is applied the same way — see
+[Video assets](#video-assets).
 
 ### Format handling
 
@@ -107,6 +115,43 @@ With the default `format: 'original'` the source format is preserved:
   unchanged rather than transcoding them; the guarantee covers the formats
   listed in the [`Asset`](#asset) section.
 
+### Video assets
+
+Videos are always passed through untouched: the picked file is copied
+byte-for-byte into a temp file and returned as-is. `maxWidth`, `maxHeight`,
+`quality`, `format` and `includeBase64` are ignored for video assets — there
+is no transcoding, and base64 for videos is deliberately unsupported.
+
+Each video asset carries `duration` (seconds), `width`/`height` (displayed
+axes — rotation metadata is applied; `0` means the metadata could not be
+read) and `fileSize`. A failure to read metadata does not fail the asset:
+`duration` is then simply absent, and `width`/`height` come back as `0`.
+
+`type` describes the container that was copied: `video/mp4`,
+`video/quicktime`, `video/webm` or `video/3gpp`, and `fileName`'s extension
+matches it (`mp4`, `mov`, `webm`, `3gp`). Containers the library does not
+recognize are labeled `video/mp4` — the bytes are still passed through
+untouched, exactly as with unrecognized image types under
+[Format handling](#format-handling). iOS only ever reports `video/mp4` or
+`video/quicktime`; `video/webm` and `video/3gpp` come from Android.
+
+Platform notes:
+
+- **iOS:** videos stored in iCloud are downloaded by the system during the
+  pick; large videos can take a while and there is no progress reporting.
+  Slo-mo videos arrive as regular movies. A Live Photo is returned as its
+  still image (also under `mediaType: 'mixed'`) — the motion part is not
+  extracted.
+- **Android:** on devices without the system Photo Picker the fallback
+  `ACTION_GET_CONTENT` chooser is used, same as for photos. Some providers
+  report no mime type or a generic one on that path, so the library sniffs the
+  file header (ISO-BMFF / Matroska) to tell a video from an image instead of
+  trusting the provider.
+
+Temp-file handling is identical to photos: the same `rn-media-picker`
+directory, the same 24-hour sweep, and `cleanTempFiles()` deletes video temp
+files too.
+
 ## Camera
 
 ```ts
@@ -132,6 +177,10 @@ const result = await launchCamera({
 | `format` | `'original' \| 'jpeg' \| 'png'` | `'original'` | Output type of the capture; `'original'` = JPEG, as before |
 | `includeBase64` | `boolean` | `false` | adds `base64` to the captured asset |
 
+`launchCamera` captures still photos; there is no `mediaType` option and no
+video recording. Videos come from the library picker — see
+[Video assets](#video-assets).
+
 ### Camera permissions
 
 - **iOS:** add `NSCameraUsageDescription` to your app's `Info.plist`. iOS shows the permission prompt automatically; the app crashes at launch of the camera if the key is missing. If the user denies access, `launchCamera` resolves `{ didCancel: false, errorCode: 'permission' }`.
@@ -154,7 +203,7 @@ const result = await launchCamera({
 
 Check `didCancel`, then `errorCode`, then read `assets`.
 
-When several images are picked and only some of them fail to load, the successful
+When several items are picked and only some of them fail to load, the successful
 ones are returned; in that case `errorCode` is set only if **every** item failed.
 
 Only one pick may be in flight at a time. A `launchImageLibrary` or
@@ -203,10 +252,9 @@ Gallery picking needs **no** permissions. Camera capture may require permissions
 
 ## Migrating from 0.2.x
 
-- `LibraryOptions.mediaType` is removed. It was never read by either native
-  module — every pick was a photo pick regardless of the value. It will return
-  when video support lands.
-- `Asset.duration` is removed. It was never populated.
+- `LibraryOptions.mediaType` is back (it was removed because it was never
+  read): `'photo' | 'video' | 'mixed'`, default `'photo'`. `Asset.duration`
+  is populated for video assets.
 - `PickerResponse.errorCode` is now the `ErrorCode` union instead of `string`.
   `ErrorCode` is exported from the package root.
 - New: `cleanTempFiles()`. Assets now live in a dedicated `rn-media-picker`
