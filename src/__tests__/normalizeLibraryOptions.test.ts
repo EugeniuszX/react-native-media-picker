@@ -9,6 +9,7 @@ describe('normalizeLibraryOptions', () => {
       quality: 1,
       includeBase64: false,
       format: 'original',
+      mediaType: 'photo',
     });
   });
 
@@ -48,5 +49,28 @@ describe('normalizeLibraryOptions', () => {
   it('passes through "jpeg" and "png" formats', () => {
     expect(normalizeLibraryOptions({ format: 'jpeg' }).format).toBe('jpeg');
     expect(normalizeLibraryOptions({ format: 'png' }).format).toBe('png');
+  });
+
+  it('defaults mediaType to "photo"', () => {
+    expect(normalizeLibraryOptions({}).mediaType).toBe('photo');
+  });
+
+  it('passes through valid media types', () => {
+    expect(normalizeLibraryOptions({ mediaType: 'video' }).mediaType).toBe(
+      'video'
+    );
+    expect(normalizeLibraryOptions({ mediaType: 'mixed' }).mediaType).toBe(
+      'mixed'
+    );
+    expect(normalizeLibraryOptions({ mediaType: 'photo' }).mediaType).toBe(
+      'photo'
+    );
+  });
+
+  it('falls back to "photo" for an invalid mediaType', () => {
+    // @ts-expect-error testing runtime guard
+    expect(normalizeLibraryOptions({ mediaType: 'audio' }).mediaType).toBe(
+      'photo'
+    );
   });
 });

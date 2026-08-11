@@ -3,6 +3,8 @@ package com.eugeniuszx.reactnativemediapicker
 internal object MediaFormat {
   enum class OutputFormat { JPEG, PNG, WEBP }
 
+  private val imageFtypBrands = listOf("hei", "hevc", "mif1", "msf1", "avif", "avis")
+
   fun normalizeMime(mime: String?): String = when (mime?.lowercase()) {
     "image/jpeg", "image/jpg" -> "image/jpeg"
     "image/png" -> "image/png"
@@ -44,5 +46,41 @@ internal object MediaFormat {
       header[14].toInt() != '8'.code || header[15].toInt() != 'X'.code
     ) return false
     return (header[20].toInt() and 0xFF and 0x02) != 0
+  }
+
+  fun isVideoHeader(header: ByteArray): Boolean {
+    if (header.size < 4) return false
+    if (header[0].toInt() and 0xFF == 0x1A && header[1].toInt() and 0xFF == 0x45 &&
+      header[2].toInt() and 0xFF == 0xDF && header[3].toInt() and 0xFF == 0xA3
+    ) return true
+    if (header.size < 12) return false
+    if (header[4].toInt() != 'f'.code || header[5].toInt() != 't'.code ||
+      header[6].toInt() != 'y'.code || header[7].toInt() != 'p'.code
+    ) return false
+    val brand = String(header, 8, 4, Charsets.ISO_8859_1).lowercase()
+    return imageFtypBrands.none { brand.startsWith(it) }
+  }
+
+  fun isVideoMime(mime: String?): Boolean =
+    mime?.lowercase()?.startsWith("video/") == true
+
+  fun normalizeVideoMime(mime: String?): String = when (mime?.lowercase()) {
+    "video/quicktime" -> "video/quicktime"
+    "video/webm" -> "video/webm"
+    "video/3gpp" -> "video/3gpp"
+    else -> "video/mp4"
+  }
+
+  /** Milliseconds as reported by [android.media.MediaMetadataRetriever] to seconds.
+   * Returns null when the value is missing, unparsable or not positive, so a
+   * duration that could not be determined stays absent from the payload. */
+  fun durationSecondsFrom(raw: String?): Double? =
+    raw?.toLongOrNull()?.let { it / 1000.0 }?.takeIf { it > 0 }
+
+  fun extensionForVideoMime(mime: String): String = when (mime) {
+    "video/quicktime" -> "mov"
+    "video/webm" -> "webm"
+    "video/3gpp" -> "3gp"
+    else -> "mp4"
   }
 }

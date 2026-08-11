@@ -32,6 +32,7 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
   private val tempFiles =
     TempFileStore(File(reactContext.cacheDir, TempFileStore.DIRECTORY_NAME))
   private val processor = ImageProcessor(reactContext.contentResolver, tempFiles)
+  private val videoProcessor = VideoProcessor(reactContext.contentResolver, tempFiles)
 
   init {
     reactContext.addActivityEventListener(this)
@@ -68,7 +69,10 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
     }
 
     try {
-      activity.startActivityForResult(intents.imageLibrary(parsed.selectionLimit), REQUEST_CODE)
+      activity.startActivityForResult(
+        intents.mediaLibrary(parsed.selectionLimit, parsed.mediaType),
+        REQUEST_CODE,
+      )
     } catch (e: Throwable) {
       pending.take()
       request.settle(ResponseFactory.failure(PickerError.OTHERS, e.message ?: "launch error"))
@@ -190,14 +194,18 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
           async {
             gate.withPermit {
               try {
-                processor.process(
-                  uri,
-                  options.format,
-                  options.maxWidth,
-                  options.maxHeight,
-                  options.quality,
-                  options.includeBase64,
-                )
+                if (options.mediaType != RequestedMediaType.PHOTO && isVideoContent(uri)) {
+                  videoProcessor.process(uri)
+                } else {
+                  processor.process(
+                    uri,
+                    options.format,
+                    options.maxWidth,
+                    options.maxHeight,
+                    options.quality,
+                    options.includeBase64,
+                  )
+                }
               } catch (e: CancellationException) {
                 throw e
               } catch (e: Exception) {
@@ -232,6 +240,30 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
           ResponseFactory.failure(PickerError.OTHERS, "Out of memory while processing images"),
         )
       }
+    }
+  }
+
+  private fun isVideoContent(uri: Uri): Boolean {
+    val mime = reactContext.contentResolver.getType(uri)
+    if (MediaFormat.isVideoMime(mime)) return true
+    if (mime?.lowercase()?.startsWith("image/") == true) return false
+
+    return try {
+      reactContext.contentResolver.openInputStream(uri)?.use { input ->
+        val header = ByteArray(HEADER_SNIFF_BYTES)
+        var read = 0
+        while (read < HEADER_SNIFF_BYTES) {
+          val count = input.read(header, read, HEADER_SNIFF_BYTES - read)
+          if (count <= 0) break
+          read += count
+        }
+        MediaFormat.isVideoHeader(header.copyOf(read))
+      } ?: false
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      Log.w(NAME, "failed to sniff the header of $uri", e)
+      false
     }
   }
 
@@ -317,5 +349,6 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
     private const val REQUEST_CODE = 48211
     private const val CAMERA_REQUEST_CODE = 48212
     private const val MAX_CONCURRENT_ITEMS = 4
+    private const val HEADER_SNIFF_BYTES = 16
   }
 }
