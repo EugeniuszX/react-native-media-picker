@@ -16,6 +16,7 @@ struct LibraryOptions: Equatable {
   let quality: Double
   let includeBase64: Bool
   let format: RequestedFormat
+  let mediaType: RequestedMediaType
 }
 
 struct CameraOptions: Equatable {
@@ -34,5 +35,15 @@ enum RequestedFormat: String {
 
   static func from(rawValue: String) -> RequestedFormat {
     RequestedFormat(rawValue: rawValue) ?? .original
+  }
+}
+
+enum RequestedMediaType: String {
+  case photo
+  case video
+  case mixed
+
+  static func from(rawValue: String) -> RequestedMediaType {
+    RequestedMediaType(rawValue: rawValue) ?? .photo
   }
 }
