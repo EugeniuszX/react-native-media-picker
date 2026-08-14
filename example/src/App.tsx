@@ -12,6 +12,7 @@ import {
   cleanTempFiles,
   launchCamera,
   launchImageLibrary,
+  releaseAssets,
   type Asset,
   type CameraType,
   type MediaType,
@@ -105,6 +106,18 @@ export default function App() {
       });
   };
 
+  const release = (asset: Asset) => {
+    setStatus('releasing…');
+    releaseAssets(asset)
+      .then(() => {
+        setAssets((current) => current.filter((a) => a.uri !== asset.uri));
+        setStatus('released one asset');
+      })
+      .catch((e: unknown) => {
+        setStatus(`threw: ${String(e)}`);
+      });
+  };
+
   return (
     <SafeAreaView style={styles.root}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -145,6 +158,7 @@ export default function App() {
                 ? `${a.thumbnailWidth}x${a.thumbnailHeight}`
                 : 'none'
             }`}</Text>
+            <Button title="Release this asset" onPress={() => release(a)} />
           </View>
         ))}
       </ScrollView>

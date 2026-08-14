@@ -187,7 +187,8 @@ applied. Its size is not configurable — `maxWidth`/`maxHeight`/`quality`/
 neither do camera captures.
 
 The thumbnail is a temp file in the same `rn-media-picker` directory, so it is
-covered by the 24-hour sweep and by `cleanTempFiles()`.
+covered by the 24-hour sweep and by `cleanTempFiles()`. Passing the asset to
+[`releaseAssets`](#releasing-individual-assets) releases the thumbnail with it.
 
 Generating a thumbnail never fails an asset: if the frame cannot be decoded,
 the asset comes back without the three `thumbnail*` fields. Always narrow
@@ -280,6 +281,33 @@ deletes the file the camera app is writing into, and the capture then resolves
 `{ didCancel: true }` as though the user had backed out; on either platform it
 can delete a just-written asset before its `uri` reaches you. Call it after the
 `launchImageLibrary` / `launchCamera` promise has settled.
+
+### Releasing individual assets
+
+`cleanTempFiles()` is all-or-nothing. When you keep some assets and are done
+with others — the user deselected one, an upload finished, a preview was
+dismissed — release just those:
+
+```ts
+import { releaseAssets } from '@eugeniuszx/react-native-media-picker';
+
+await releaseAssets(result.assets ?? []); // whole batch
+await releaseAssets(asset); // one asset
+await releaseAssets(asset.uri); // one uri
+```
+
+It accepts an asset, a `uri` string, or an array mixing both. Passing an asset
+also releases its `thumbnailUri`, which a bare `uri` string would leave behind.
+Duplicates and empty entries are dropped, and an empty list never reaches the
+native module.
+
+Only files inside the library's own `rn-media-picker` directory can be deleted:
+a `uri` pointing anywhere else — or one this library did not hand out — is
+ignored rather than acted on. Non-`file://` uris are ignored too.
+
+Like `cleanTempFiles`, it never rejects, and the promise resolves once the
+deletion is scheduled rather than once the files are gone. The same warning
+applies: do not call it while a pick is in flight.
 
 Upgrading from 0.2.x: temp files written by earlier versions went straight into
 the cache/temp directory rather than the `rn-media-picker` subdirectory, so

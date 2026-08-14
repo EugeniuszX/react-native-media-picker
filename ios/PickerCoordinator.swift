@@ -88,6 +88,15 @@ import UIKit
     }
   }
 
+  @objc public func releaseAssets(_ uris: [Any]) {
+    let names = uris.compactMap { $0 as? String }
+    guard !names.isEmpty else { return }
+    let store = tempFiles
+    DispatchQueue.global(qos: .utility).async {
+      store.remove(uris: names)
+    }
+  }
+
   private func finish(
     _ assets: [AssetPayload]?,
     _ didCancel: Bool,

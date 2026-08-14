@@ -48,6 +48,7 @@ export interface Spec extends TurboModule {
   launchImageLibrary(options: NativeLibraryOptions): Promise<PickerResponse>;
   launchCamera(options: NativeCameraOptions): Promise<PickerResponse>;
   cleanTempFiles(): Promise<void>;
+  releaseAssets(uris: Array<string>): Promise<void>;
 }
 
 export default TurboModuleRegistry.getEnforcing<Spec>('ReactNativeMediaPicker');

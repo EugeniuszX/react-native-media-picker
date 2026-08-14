@@ -81,6 +81,14 @@ static NSDictionary *RNMediaPickerBuildResponse(NSArray<NSDictionary<NSString *,
     resolve(nil);
 }
 
+- (void)releaseAssets:(NSArray *)uris
+              resolve:(RCTPromiseResolveBlock)resolve
+               reject:(RCTPromiseRejectBlock)reject
+{
+    [_coordinator releaseAssets:uris ?: @[]];
+    resolve(nil);
+}
+
 - (std::shared_ptr<facebook::react::TurboModule>)getTurboModule:
     (const facebook::react::ObjCTurboModule::InitParams &)params
 {

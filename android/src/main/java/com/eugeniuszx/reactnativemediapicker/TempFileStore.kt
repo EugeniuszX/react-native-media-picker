@@ -1,6 +1,8 @@
 package com.eugeniuszx.reactnativemediapicker
 
 import java.io.File
+import java.net.URI
+import java.net.URISyntaxException
 import java.util.UUID
 
 internal class TempFileStore(private val root: File) {
@@ -10,6 +12,12 @@ internal class TempFileStore(private val root: File) {
   }
 
   fun removeAll(): Int = remove { true }
+
+  fun remove(uris: List<String>): Int {
+    val names = uris.mapNotNull { fileNameForUri(it) }.toSet()
+    if (names.isEmpty()) return 0
+    return remove { file -> file.name in names }
+  }
 
   fun removeFilesOlderThan(ageMillis: Long, nowMillis: Long): Int =
     remove { file ->
@@ -26,5 +34,16 @@ internal class TempFileStore(private val root: File) {
     const val DIRECTORY_NAME = "rn-media-picker"
 
     const val AUTO_SWEEP_AGE_MILLIS = 24L * 60 * 60 * 1000
+
+    fun fileNameForUri(uri: String): String? = try {
+      val parsed = URI(uri)
+      if (!parsed.scheme.equals("file", ignoreCase = true)) {
+        null
+      } else {
+        parsed.path?.substringAfterLast('/')?.takeIf { it.isNotEmpty() }
+      }
+    } catch (e: URISyntaxException) {
+      null
+    }
   }
 }
