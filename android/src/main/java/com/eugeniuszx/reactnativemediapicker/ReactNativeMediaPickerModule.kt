@@ -67,7 +67,7 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
 
     val request = PendingRequest(promise, libraryOptions = parsed)
     if (!pending.begin(request)) {
-      promise.resolve(ResponseFactory.failure(PickerError.OTHERS, "Already waiting for a pick."))
+      promise.resolve(ResponseFactory.failure(PickerError.BUSY, "Already waiting for a pick."))
       return
     }
 
@@ -100,7 +100,7 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
 
     val request = PendingRequest(promise, cameraOptions = parsed)
     if (!pending.begin(request)) {
-      promise.resolve(ResponseFactory.failure(PickerError.OTHERS, "Already waiting for a pick."))
+      promise.resolve(ResponseFactory.failure(PickerError.BUSY, "Already waiting for a pick."))
       return
     }
 

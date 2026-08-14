@@ -33,7 +33,7 @@ import UIKit
     completion: @escaping ([[String: Any]]?, Bool, String?, String?) -> Void
   ) {
     guard session.begin(completion) else {
-      completion(nil, false, PickerError.others.code, "Already waiting for a pick.")
+      completion(nil, false, PickerError.busy.code, "Already waiting for a pick.")
       return
     }
     let options = LibraryOptions(
@@ -62,7 +62,7 @@ import UIKit
     completion: @escaping ([[String: Any]]?, Bool, String?, String?) -> Void
   ) {
     guard session.begin(completion) else {
-      completion(nil, false, PickerError.others.code, "Already waiting for a pick.")
+      completion(nil, false, PickerError.busy.code, "Already waiting for a pick.")
       return
     }
     let options = CameraOptions(
