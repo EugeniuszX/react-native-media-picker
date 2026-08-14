@@ -1,6 +1,20 @@
 import type { TurboModule } from 'react-native';
 import { TurboModuleRegistry } from 'react-native';
 
+export type Exif = {
+  dateTimeOriginal?: string;
+  latitude?: number;
+  longitude?: number;
+  altitude?: number;
+  make?: string;
+  model?: string;
+  orientation?: number;
+  iso?: number;
+  fNumber?: number;
+  exposureTime?: number;
+  focalLength?: number;
+};
+
 export type Asset = {
   uri: string;
   type: string;
@@ -13,6 +27,7 @@ export type Asset = {
   thumbnailUri?: string;
   thumbnailWidth?: number;
   thumbnailHeight?: number;
+  exif?: Exif;
 };
 
 export type ErrorCode = 'permission' | 'camera_unavailable' | 'others';
