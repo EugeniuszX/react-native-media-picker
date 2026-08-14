@@ -164,18 +164,23 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
    * cancelled before the job could start — so a caller never awaits forever.
    */
   private fun resolveWithRemovedCount(promise: Promise, label: String, remove: () -> Int) {
+    val settled = AtomicBoolean(false)
+    fun settle(count: Int) {
+      if (settled.compareAndSet(false, true)) promise.resolve(count)
+    }
+
     val job = moduleScope.launch {
       try {
-        promise.resolve(remove())
+        settle(remove())
       } catch (e: CancellationException) {
         throw e
       } catch (e: Exception) {
         Log.w(NAME, label, e)
-        promise.resolve(0)
+        settle(0)
       }
     }
     job.invokeOnCompletion { cause ->
-      if (cause != null) promise.resolve(0)
+      if (cause != null) settle(0)
     }
   }
 
