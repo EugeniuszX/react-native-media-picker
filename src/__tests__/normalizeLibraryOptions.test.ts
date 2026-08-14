@@ -11,6 +11,8 @@ describe('normalizeLibraryOptions', () => {
       format: 'original',
       mediaType: 'photo',
       includeThumbnail: false,
+      includeExif: false,
+      stripMetadata: false,
     });
   });
 
@@ -79,5 +81,20 @@ describe('normalizeLibraryOptions', () => {
     expect(normalizeLibraryOptions({ mediaType: 'audio' }).mediaType).toBe(
       'photo'
     );
+  });
+
+  it('defaults the new metadata options to false', () => {
+    const r = normalizeLibraryOptions({});
+    expect(r.includeExif).toBe(false);
+    expect(r.stripMetadata).toBe(false);
+  });
+
+  it('passes through the new metadata options', () => {
+    const r = normalizeLibraryOptions({
+      includeExif: true,
+      stripMetadata: true,
+    });
+    expect(r.includeExif).toBe(true);
+    expect(r.stripMetadata).toBe(true);
   });
 });

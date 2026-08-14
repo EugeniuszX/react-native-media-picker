@@ -48,15 +48,23 @@ export type NativeLibraryOptions = {
   format: string;
   mediaType: string;
   includeThumbnail: boolean;
+  includeExif: boolean;
+  stripMetadata: boolean;
 };
 
 export type NativeCameraOptions = {
   cameraType: string;
+  mediaType: string;
   maxWidth: number;
   maxHeight: number;
   quality: number;
   includeBase64: boolean;
   format: string;
+  maxDuration: number;
+  videoQuality: string;
+  includeThumbnail: boolean;
+  includeExif: boolean;
+  stripMetadata: boolean;
 };
 
 export interface Spec extends TurboModule {
