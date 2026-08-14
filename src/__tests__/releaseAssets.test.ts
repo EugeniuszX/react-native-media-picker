@@ -67,4 +67,13 @@ describe('releaseAssets', () => {
     await releaseAssets('');
     expect(NativeMediaPicker.releaseAssets).not.toHaveBeenCalled();
   });
+
+  it('resolves 0 without touching the native module when nothing is releasable', async () => {
+    await expect(releaseAssets([])).resolves.toBe(0);
+  });
+
+  it('resolves the number of files the native module removed', async () => {
+    (NativeMediaPicker.releaseAssets as jest.Mock).mockResolvedValueOnce(2);
+    await expect(releaseAssets(['file:///tmp/a.mp4'])).resolves.toBe(2);
+  });
 });

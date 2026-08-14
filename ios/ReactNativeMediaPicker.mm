@@ -77,16 +77,18 @@ static NSDictionary *RNMediaPickerBuildResponse(NSArray<NSDictionary<NSString *,
 - (void)cleanTempFiles:(RCTPromiseResolveBlock)resolve
                 reject:(RCTPromiseRejectBlock)reject
 {
-    [_coordinator cleanTempFiles];
-    resolve(nil);
+    [_coordinator cleanTempFilesWithCompletion:^(NSInteger removed) {
+        resolve(@(removed));
+    }];
 }
 
 - (void)releaseAssets:(NSArray *)uris
               resolve:(RCTPromiseResolveBlock)resolve
                reject:(RCTPromiseRejectBlock)reject
 {
-    [_coordinator releaseAssets:uris ?: @[]];
-    resolve(nil);
+    [_coordinator releaseAssets:uris ?: @[] completion:^(NSInteger removed) {
+        resolve(@(removed));
+    }];
 }
 
 - (std::shared_ptr<facebook::react::TurboModule>)getTurboModule:

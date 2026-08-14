@@ -47,8 +47,8 @@ export type NativeCameraOptions = {
 export interface Spec extends TurboModule {
   launchImageLibrary(options: NativeLibraryOptions): Promise<PickerResponse>;
   launchCamera(options: NativeCameraOptions): Promise<PickerResponse>;
-  cleanTempFiles(): Promise<void>;
-  releaseAssets(uris: Array<string>): Promise<void>;
+  cleanTempFiles(): Promise<number>;
+  releaseAssets(uris: Array<string>): Promise<number>;
 }
 
 export default TurboModuleRegistry.getEnforcing<Spec>('ReactNativeMediaPicker');

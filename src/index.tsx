@@ -92,7 +92,7 @@ export const launchCamera = (
 ): Promise<PickerResponse> =>
   NativeMediaPicker.launchCamera(normalizeCameraOptions(options));
 
-export const cleanTempFiles = (): Promise<void> =>
+export const cleanTempFiles = (): Promise<number> =>
   NativeMediaPicker.cleanTempFiles();
 
 export type ReleasableAsset = Pick<Asset, 'uri' | 'thumbnailUri'>;
@@ -122,9 +122,9 @@ export const collectReleasableUris = (
 
 export const releaseAssets = (
   target: ReleasableAsset | string | ReadonlyArray<ReleasableAsset | string>
-): Promise<void> => {
+): Promise<number> => {
   const uris = collectReleasableUris(target);
   return uris.length
     ? NativeMediaPicker.releaseAssets(uris)
-    : Promise.resolve();
+    : Promise.resolve(0);
 };

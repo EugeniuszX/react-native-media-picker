@@ -81,19 +81,22 @@ import UIKit
     }
   }
 
-  @objc public func cleanTempFiles() {
+  @objc public func cleanTempFiles(completion: @escaping (Int) -> Void) {
     let store = tempFiles
     DispatchQueue.global(qos: .utility).async {
-      store.removeAll()
+      completion(store.removeAll())
     }
   }
 
-  @objc public func releaseAssets(_ uris: [Any]) {
+  @objc public func releaseAssets(_ uris: [Any], completion: @escaping (Int) -> Void) {
     let names = uris.compactMap { $0 as? String }
-    guard !names.isEmpty else { return }
+    guard !names.isEmpty else {
+      completion(0)
+      return
+    }
     let store = tempFiles
     DispatchQueue.global(qos: .utility).async {
-      store.remove(uris: names)
+      completion(store.remove(uris: names))
     }
   }
 
