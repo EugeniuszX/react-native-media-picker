@@ -9,7 +9,12 @@ final class VideoProcessor {
     self.tempFiles = tempFiles
   }
 
-  func process(sourceURL: URL, uti: String, includeThumbnail: Bool = false) -> AssetPayload? {
+  func process(
+    sourceURL: URL,
+    uti: String,
+    includeThumbnail: Bool = false,
+    suggestedName: String? = nil
+  ) -> AssetPayload? {
     let format = VideoFormat.from(uti: uti)
     guard let destination = try? tempFiles.makeFileURL(fileExtension: format.fileExtension)
     else { return nil }
@@ -40,7 +45,11 @@ final class VideoProcessor {
     return AssetPayload(
       uri: destination.absoluteString,
       mime: format.mime,
-      fileName: destination.lastPathComponent,
+      fileName: AssetFileName.resolve(
+        suggested: suggestedName,
+        fallback: destination.lastPathComponent,
+        fileExtension: destination.pathExtension
+      ),
       fileSize: fileSize,
       width: width,
       height: height,

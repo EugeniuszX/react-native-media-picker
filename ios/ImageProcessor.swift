@@ -17,7 +17,8 @@ struct ImageProcessor {
     maxWidth: Int,
     maxHeight: Int,
     quality: Double,
-    includeBase64: Bool
+    includeBase64: Bool,
+    suggestedName: String? = nil
   ) -> AssetPayload? {
     let metadata = readMetadata(from: data)
     let isAnimated =
@@ -43,7 +44,8 @@ struct ImageProcessor {
         format: format,
         width: plan.displayWidth,
         height: plan.displayHeight,
-        includeBase64: includeBase64
+        includeBase64: includeBase64,
+        suggestedName: suggestedName
       )
     }
 
@@ -56,7 +58,8 @@ struct ImageProcessor {
       resized,
       format: output.target,
       quality: quality,
-      includeBase64: includeBase64
+      includeBase64: includeBase64,
+      suggestedName: suggestedName
     )
   }
 
@@ -184,7 +187,8 @@ struct ImageProcessor {
     _ image: UIImage,
     format: ImageFormat,
     quality: Double,
-    includeBase64: Bool
+    includeBase64: Bool,
+    suggestedName: String? = nil
   ) -> AssetPayload? {
     guard let encoded = encode(image, format: format, quality: quality) else { return nil }
     let cgImage = image.cgImage
@@ -195,7 +199,8 @@ struct ImageProcessor {
       format: encoded.format,
       width: pixelWidth,
       height: pixelHeight,
-      includeBase64: includeBase64
+      includeBase64: includeBase64,
+      suggestedName: suggestedName
     )
   }
 
@@ -204,7 +209,8 @@ struct ImageProcessor {
     format: ImageFormat,
     width: Int,
     height: Int,
-    includeBase64: Bool
+    includeBase64: Bool,
+    suggestedName: String?
   ) -> AssetPayload? {
     do {
       let url = try tempFiles.makeFileURL(fileExtension: format.fileExtension)
@@ -212,7 +218,11 @@ struct ImageProcessor {
       return AssetPayload(
         uri: url.absoluteString,
         mime: format.mime,
-        fileName: url.lastPathComponent,
+        fileName: AssetFileName.resolve(
+          suggested: suggestedName,
+          fallback: url.lastPathComponent,
+          fileExtension: url.pathExtension
+        ),
         fileSize: data.count,
         width: width,
         height: height,

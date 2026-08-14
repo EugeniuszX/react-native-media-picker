@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 
 class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationContext) :
   NativeReactNativeMediaPickerSpec(reactContext),
@@ -114,16 +115,27 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
     }
   }
 
-  override fun cleanTempFiles(promise: Promise) {
-    promise.resolve(null)
-    moduleScope.launch {
-      try {
-        tempFiles.removeAll()
-      } catch (e: CancellationException) {
-        throw e
-      } catch (e: Exception) {
-        Log.w(NAME, "failed to clean temp files", e)
+  override fun getCameraPermissionStatus(promise: Promise) {
+    promise.resolve(permissions.status(reactContext.currentActivity).value)
+  }
+
+  override fun requestCameraPermission(promise: Promise) {
+    val settled = AtomicBoolean(false)
+    try {
+      permissions.request(reactContext.currentActivity) { status ->
+        if (settled.compareAndSet(false, true)) promise.resolve(status.value)
       }
+    } catch (e: Throwable) {
+      Log.w(NAME, "failed to request the camera permission", e)
+      if (settled.compareAndSet(false, true)) {
+        promise.resolve(permissions.status(reactContext.currentActivity).value)
+      }
+    }
+  }
+
+  override fun cleanTempFiles(promise: Promise) {
+    resolveWithRemovedCount(promise, "failed to clean temp files") {
+      tempFiles.removeAll()
     }
   }
 
@@ -136,17 +148,39 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
       }
     }
 
-    promise.resolve(null)
-    if (names.isEmpty()) return
+    if (names.isEmpty()) {
+      promise.resolve(0)
+      return
+    }
 
-    moduleScope.launch {
+    resolveWithRemovedCount(promise, "failed to release temp files") {
+      tempFiles.remove(names)
+    }
+  }
+
+  /**
+   * Resolves [promise] with the number of files [remove] deleted, once the deletion is done.
+   * A cancelled module scope still settles the promise — including when the scope was already
+   * cancelled before the job could start — so a caller never awaits forever.
+   */
+  private fun resolveWithRemovedCount(promise: Promise, label: String, remove: () -> Int) {
+    val settled = AtomicBoolean(false)
+    fun settle(count: Int) {
+      if (settled.compareAndSet(false, true)) promise.resolve(count)
+    }
+
+    val job = moduleScope.launch {
       try {
-        tempFiles.remove(names)
+        settle(remove())
       } catch (e: CancellationException) {
         throw e
       } catch (e: Exception) {
-        Log.w(NAME, "failed to release temp files", e)
+        Log.w(NAME, label, e)
+        settle(0)
       }
+    }
+    job.invokeOnCompletion { cause ->
+      if (cause != null) settle(0)
     }
   }
 
@@ -219,8 +253,9 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
           async {
             gate.withPermit {
               try {
+                val suggestedName = SourceDisplayName.of(reactContext.contentResolver, uri)
                 if (options.mediaType != RequestedMediaType.PHOTO && isVideoContent(uri)) {
-                  videoProcessor.process(uri, options.includeThumbnail)
+                  videoProcessor.process(uri, options.includeThumbnail, suggestedName)
                 } else {
                   processor.process(
                     uri,
@@ -229,6 +264,7 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
                     options.maxHeight,
                     options.quality,
                     options.includeBase64,
+                    suggestedName,
                   )
                 }
               } catch (e: CancellationException) {

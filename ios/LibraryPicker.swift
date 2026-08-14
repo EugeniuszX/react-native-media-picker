@@ -2,7 +2,9 @@ import PhotosUI
 import UIKit
 import UniformTypeIdentifiers
 
-final class LibraryPicker: NSObject, PHPickerViewControllerDelegate {
+final class LibraryPicker: NSObject, PHPickerViewControllerDelegate,
+  UIAdaptivePresentationControllerDelegate
+{
   static let maxConcurrentItemLoads = 4
 
   static let dismissalTimeout: TimeInterval = 3
@@ -35,6 +37,12 @@ final class LibraryPicker: NSObject, PHPickerViewControllerDelegate {
     case .mixed: configuration.filter = .any(of: [.images, .videos])
     }
     configuration.selectionLimit = options.selectionLimit
+    // Results follow the order the user tapped them in, not the order they sit in the library.
+    configuration.selection = .ordered
+    switch AssetRepresentationPlan.resolve(requested: options.format) {
+    case .current: configuration.preferredAssetRepresentationMode = .current
+    case .automatic: configuration.preferredAssetRepresentationMode = .automatic
+    }
 
     selfReference = self
 
@@ -49,8 +57,17 @@ final class LibraryPicker: NSObject, PHPickerViewControllerDelegate {
       }
       let picker = PHPickerViewController(configuration: configuration)
       picker.delegate = self
+      // The picker is a sheet, and swiping it away never reaches the picker delegate — without
+      // this the session would stay claimed forever and every later pick would be rejected.
+      picker.presentationController?.delegate = self
       presenter.present(picker, animated: true)
     }
+  }
+
+  /// Called only for a dismissal the user drove; a programmatic `dismiss` does not reach here, so
+  /// this cannot race the delegate paths below. The picker is already gone — nothing to wait for.
+  func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+    complete(nil, true, nil, nil)
   }
 
   func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
@@ -96,7 +113,8 @@ final class LibraryPicker: NSObject, PHPickerViewControllerDelegate {
               let payload = self.videoProcessor.process(
                 sourceURL: url,
                 uti: movieUTI,
-                includeThumbnail: self.options.includeThumbnail
+                includeThumbnail: self.options.includeThumbnail,
+                suggestedName: provider.suggestedName
               )
             else { return }
             lock.lock()
@@ -135,7 +153,8 @@ final class LibraryPicker: NSObject, PHPickerViewControllerDelegate {
               maxWidth: self.options.maxWidth,
               maxHeight: self.options.maxHeight,
               quality: self.options.quality,
-              includeBase64: self.options.includeBase64
+              includeBase64: self.options.includeBase64,
+              suggestedName: provider.suggestedName
             )
           else { return }
           lock.lock()

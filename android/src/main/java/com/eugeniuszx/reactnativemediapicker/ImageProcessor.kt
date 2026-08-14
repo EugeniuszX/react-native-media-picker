@@ -22,6 +22,7 @@ internal class ImageProcessor(
     maxHeight: Int,
     quality: Int,
     includeBase64: Boolean,
+    suggestedName: String? = null,
   ): AssetPayload {
     val srcMime = MediaFormat.normalizeMime(resolver.getType(uri))
     val bounds = readBounds(uri)
@@ -40,9 +41,9 @@ internal class ImageProcessor(
     )
 
     return if (plan.needsTransform || output.forceReencode) {
-      transform(uri, output.target, plan, orientation, quality, includeBase64)
+      transform(uri, output.target, plan, orientation, quality, includeBase64, suggestedName)
     } else {
-      passthrough(uri, srcMime, plan, includeBase64)
+      passthrough(uri, srcMime, plan, includeBase64, suggestedName)
     }
   }
 
@@ -88,6 +89,7 @@ internal class ImageProcessor(
     mime: String,
     plan: DecodePlan,
     includeBase64: Boolean,
+    suggestedName: String?,
   ): AssetPayload {
     val outFile = tempFiles.createFile(MediaFormat.extensionForMime(mime))
     var base64: String? = null
@@ -101,7 +103,7 @@ internal class ImageProcessor(
         FileOutputStream(outFile).use { output -> input.copyTo(output) }
       }
     }
-    return payload(outFile, mime, plan.displayWidth, plan.displayHeight, base64)
+    return payload(outFile, mime, plan.displayWidth, plan.displayHeight, base64, suggestedName)
   }
 
   private fun transform(
@@ -111,6 +113,7 @@ internal class ImageProcessor(
     orientation: ExifOrientation,
     quality: Int,
     includeBase64: Boolean,
+    suggestedName: String?,
   ): AssetPayload {
     val decodeOptions = BitmapFactory.Options().apply { inSampleSize = plan.sampleSize }
     var bitmap = resolver.openInputStream(uri).use {
@@ -139,7 +142,7 @@ internal class ImageProcessor(
     } else {
       null
     }
-    return payload(outFile, outMime, width, height, base64)
+    return payload(outFile, outMime, width, height, base64, suggestedName)
   }
 
   private fun applyOrientation(bitmap: Bitmap, orientation: ExifOrientation): Bitmap {
@@ -180,10 +183,11 @@ internal class ImageProcessor(
     width: Int,
     height: Int,
     base64: String?,
+    suggestedName: String?,
   ) = AssetPayload(
     uri = Uri.fromFile(file).toString(),
     mime = mime,
-    fileName = file.name,
+    fileName = AssetFileName.resolve(suggestedName, file.name, file.extension),
     fileSize = file.length(),
     width = width,
     height = height,

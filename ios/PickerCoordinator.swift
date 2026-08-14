@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import UIKit
 
@@ -81,19 +82,53 @@ import UIKit
     }
   }
 
-  @objc public func cleanTempFiles() {
-    let store = tempFiles
-    DispatchQueue.global(qos: .utility).async {
-      store.removeAll()
+  @objc public func getCameraPermissionStatus() -> String {
+    Self.currentPermission().rawValue
+  }
+
+  @objc public func requestCameraPermission(completion: @escaping (String) -> Void) {
+    guard Self.currentPermission() == .notDetermined else {
+      completion(Self.currentPermission().rawValue)
+      return
+    }
+    AVCaptureDevice.requestAccess(for: .video) { _ in
+      completion(Self.currentPermission().rawValue)
     }
   }
 
-  @objc public func releaseAssets(_ uris: [Any]) {
-    let names = uris.compactMap { $0 as? String }
-    guard !names.isEmpty else { return }
+  private static func currentPermission() -> CameraPermission {
+    CameraPermission.resolve(
+      hasCamera: AVCaptureDevice.default(for: .video) != nil,
+      authorization: authorization(of: AVCaptureDevice.authorizationStatus(for: .video))
+    )
+  }
+
+  private static func authorization(of status: AVAuthorizationStatus) -> CameraAuthorization {
+    switch status {
+    case .authorized: return .authorized
+    case .notDetermined: return .notDetermined
+    case .denied: return .denied
+    case .restricted: return .restricted
+    @unknown default: return .unknown
+    }
+  }
+
+  @objc public func cleanTempFiles(completion: @escaping (Int) -> Void) {
     let store = tempFiles
     DispatchQueue.global(qos: .utility).async {
-      store.remove(uris: names)
+      completion(store.removeAll())
+    }
+  }
+
+  @objc public func releaseAssets(_ uris: [Any], completion: @escaping (Int) -> Void) {
+    let names = uris.compactMap { $0 as? String }
+    guard !names.isEmpty else {
+      completion(0)
+      return
+    }
+    let store = tempFiles
+    DispatchQueue.global(qos: .utility).async {
+      completion(store.remove(uris: names))
     }
   }
 
