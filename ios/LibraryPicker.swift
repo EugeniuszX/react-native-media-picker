@@ -96,7 +96,8 @@ final class LibraryPicker: NSObject, PHPickerViewControllerDelegate {
               let payload = self.videoProcessor.process(
                 sourceURL: url,
                 uti: movieUTI,
-                includeThumbnail: self.options.includeThumbnail
+                includeThumbnail: self.options.includeThumbnail,
+                suggestedName: provider.suggestedName
               )
             else { return }
             lock.lock()
@@ -135,7 +136,8 @@ final class LibraryPicker: NSObject, PHPickerViewControllerDelegate {
               maxWidth: self.options.maxWidth,
               maxHeight: self.options.maxHeight,
               quality: self.options.quality,
-              includeBase64: self.options.includeBase64
+              includeBase64: self.options.includeBase64,
+              suggestedName: provider.suggestedName
             )
           else { return }
           lock.lock()

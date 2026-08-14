@@ -10,7 +10,11 @@ internal class VideoProcessor(
   private val contentResolver: ContentResolver,
   private val tempFiles: TempFileStore,
 ) {
-  fun process(uri: Uri, includeThumbnail: Boolean = false): AssetPayload {
+  fun process(
+    uri: Uri,
+    includeThumbnail: Boolean = false,
+    suggestedName: String? = null,
+  ): AssetPayload {
     val mime = MediaFormat.normalizeVideoMime(contentResolver.getType(uri))
     val file = tempFiles.createFile(MediaFormat.extensionForVideoMime(mime))
     try {
@@ -61,7 +65,7 @@ internal class VideoProcessor(
     return AssetPayload(
       uri = Uri.fromFile(file).toString(),
       mime = mime,
-      fileName = file.name,
+      fileName = AssetFileName.resolve(suggestedName, file.name, file.extension),
       fileSize = file.length(),
       width = width,
       height = height,

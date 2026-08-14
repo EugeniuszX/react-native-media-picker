@@ -229,8 +229,9 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
           async {
             gate.withPermit {
               try {
+                val suggestedName = SourceDisplayName.of(reactContext.contentResolver, uri)
                 if (options.mediaType != RequestedMediaType.PHOTO && isVideoContent(uri)) {
-                  videoProcessor.process(uri, options.includeThumbnail)
+                  videoProcessor.process(uri, options.includeThumbnail, suggestedName)
                 } else {
                   processor.process(
                     uri,
@@ -239,6 +240,7 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
                     options.maxHeight,
                     options.quality,
                     options.includeBase64,
+                    suggestedName,
                   )
                 }
               } catch (e: CancellationException) {
