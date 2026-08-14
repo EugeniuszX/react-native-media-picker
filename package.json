@@ -10,6 +10,7 @@
       "types": "./lib/typescript/src/index.d.ts",
       "default": "./lib/module/index.js"
     },
+    "./app.plugin.js": "./app.plugin.js",
     "./package.json": "./package.json"
   },
   "files": [
@@ -19,6 +20,7 @@
     "ios",
     "*.podspec",
     "react-native.config.js",
+    "app.plugin.js",
     "!ios/build",
     "!ios/CoreTests",
     "!android/src/test",
