@@ -35,6 +35,12 @@ final class LibraryPicker: NSObject, PHPickerViewControllerDelegate {
     case .mixed: configuration.filter = .any(of: [.images, .videos])
     }
     configuration.selectionLimit = options.selectionLimit
+    // Results follow the order the user tapped them in, not the order they sit in the library.
+    configuration.selection = .ordered
+    switch AssetRepresentationPlan.resolve(requested: options.format) {
+    case .current: configuration.preferredAssetRepresentationMode = .current
+    case .automatic: configuration.preferredAssetRepresentationMode = .automatic
+    }
 
     selfReference = self
 
