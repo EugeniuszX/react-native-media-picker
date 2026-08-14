@@ -2,7 +2,9 @@ import PhotosUI
 import UIKit
 import UniformTypeIdentifiers
 
-final class LibraryPicker: NSObject, PHPickerViewControllerDelegate {
+final class LibraryPicker: NSObject, PHPickerViewControllerDelegate,
+  UIAdaptivePresentationControllerDelegate
+{
   static let maxConcurrentItemLoads = 4
 
   static let dismissalTimeout: TimeInterval = 3
@@ -55,8 +57,17 @@ final class LibraryPicker: NSObject, PHPickerViewControllerDelegate {
       }
       let picker = PHPickerViewController(configuration: configuration)
       picker.delegate = self
+      // The picker is a sheet, and swiping it away never reaches the picker delegate — without
+      // this the session would stay claimed forever and every later pick would be rejected.
+      picker.presentationController?.delegate = self
       presenter.present(picker, animated: true)
     }
+  }
+
+  /// Called only for a dismissal the user drove; a programmatic `dismiss` does not reach here, so
+  /// this cannot race the delegate paths below. The picker is already gone — nothing to wait for.
+  func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+    complete(nil, true, nil, nil)
   }
 
   func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
