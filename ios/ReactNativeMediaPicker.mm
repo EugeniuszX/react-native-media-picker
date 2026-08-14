@@ -47,6 +47,7 @@ static NSDictionary *RNMediaPickerBuildResponse(NSArray<NSDictionary<NSString *,
                                                 format:options.format()
                                              mediaType:options.mediaType()
                                          includeBase64:options.includeBase64()
+                                      includeThumbnail:options.includeThumbnail()
                                             completion:^(NSArray<NSDictionary<NSString *, id> *> *assets,
                                                          BOOL didCancel,
                                                          NSString *errorCode,

@@ -17,6 +17,7 @@ struct LibraryOptions: Equatable {
   let includeBase64: Bool
   let format: RequestedFormat
   let mediaType: RequestedMediaType
+  let includeThumbnail: Bool
 }
 
 struct CameraOptions: Equatable {

@@ -20,6 +20,7 @@ export interface LibraryOptions {
   includeBase64?: boolean;
   format?: OutputFormat;
   mediaType?: MediaType;
+  includeThumbnail?: boolean;
 }
 
 export type CameraType = 'back' | 'front';
@@ -60,6 +61,7 @@ export const normalizeLibraryOptions = (
   includeBase64: options.includeBase64 ?? false,
   format: normalizeFormat(options.format),
   mediaType: normalizeMediaType(options.mediaType),
+  includeThumbnail: options.includeThumbnail ?? false,
 });
 
 export const launchImageLibrary = (

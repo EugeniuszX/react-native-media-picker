@@ -49,6 +49,7 @@ if (!result.didCancel && result.assets) {
 | `quality` | `number` | `1` | Re-encode quality 0..1 (JPEG/WebP/HEIC); ignored for lossless PNG, for video assets, and for animated images (unless an explicit `format` forces a first-frame re-encode) |
 | `format` | `'original' \| 'jpeg' \| 'png'` | `'original'` | Guarantee the output file type; `'original'` preserves the source format (see below); ignored for video assets |
 | `includeBase64` | `boolean` | `false` | adds `base64` to each asset; ignored for video assets |
+| `includeThumbnail` | `boolean` | `false` | adds `thumbnailUri` to each **video** asset (see [Video thumbnails](#video-thumbnails)); ignored for photos |
 
 Videos can be picked with `mediaType: 'video'` (or alongside photos with
 `'mixed'`) — see [Video assets](#video-assets).
@@ -65,8 +66,11 @@ Each picked item resolves to: `uri` (a `file://` path to a temp file), `type`
 `video/mp4`, `video/quicktime`, `video/webm` or `video/3gpp` for videos; see
 [Format handling](#format-handling) and [Video assets](#video-assets) for how
 it is derived), `fileName` (extension matches `type`), `fileSize`, `width`,
-`height`, `duration` (seconds, video assets only — absent for photos), and
-`base64` (only when `includeBase64` is true, photos only).
+`height`, `duration` (seconds, video assets only — absent for photos),
+`base64` (only when `includeBase64` is true, photos only), and
+`thumbnailUri`/`thumbnailWidth`/`thumbnailHeight` (only when
+`includeThumbnail` is true, video assets only — see
+[Video thumbnails](#video-thumbnails)).
 
 `uri` and `type` are the only fields declared non-optional. `fileName`,
 `fileSize`, `width` and `height` are typed `?:`, so TypeScript makes you narrow
@@ -161,6 +165,33 @@ Platform notes:
 Temp-file handling is identical to photos: the same `rn-media-picker`
 directory, the same 24-hour sweep, and `cleanTempFiles()` deletes video temp
 files too.
+
+### Video thumbnails
+
+`includeThumbnail: true` writes a poster frame for every **video** asset and
+adds `thumbnailUri`, `thumbnailWidth` and `thumbnailHeight` to it:
+
+```ts
+const result = await launchImageLibrary({
+  mediaType: 'video',
+  includeThumbnail: true,
+});
+
+// <Image source={{ uri: result.assets?.[0].thumbnailUri }} />
+```
+
+The thumbnail is a **JPEG** taken from the first renderable frame, fitted
+inside 512×512 (never scaled up), with the video's rotation metadata already
+applied. Its size is not configurable — `maxWidth`/`maxHeight`/`quality`/
+`format` describe the asset, not its preview. Photo assets never get one, and
+neither do camera captures.
+
+The thumbnail is a temp file in the same `rn-media-picker` directory, so it is
+covered by the 24-hour sweep and by `cleanTempFiles()`.
+
+Generating a thumbnail never fails an asset: if the frame cannot be decoded,
+the asset comes back without the three `thumbnail*` fields. Always narrow
+`thumbnailUri` before using it.
 
 ## Camera
 

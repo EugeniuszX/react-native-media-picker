@@ -62,6 +62,31 @@ final class AssetPayloadTests: XCTestCase {
     XCTAssertNil(payload.dictionary["duration"])
   }
 
+  func testDictionaryIncludesTheThumbnailKeysWhenSet() {
+    let payload = AssetPayload(
+      uri: "file:///tmp/a.mp4",
+      mime: "video/mp4",
+      fileName: "a.mp4",
+      fileSize: 10,
+      width: 1920,
+      height: 1080,
+      base64: nil,
+      duration: 12.5,
+      thumbnail: Thumbnail(uri: "file:///tmp/a.jpg", width: 512, height: 288)
+    )
+    let dict = payload.dictionary
+    XCTAssertEqual(dict["thumbnailUri"] as? String, "file:///tmp/a.jpg")
+    XCTAssertEqual(dict["thumbnailWidth"] as? Int, 512)
+    XCTAssertEqual(dict["thumbnailHeight"] as? Int, 288)
+  }
+
+  func testDictionaryOmitsTheThumbnailKeysWhenNil() {
+    let dict = makePayload(base64: nil).dictionary
+    XCTAssertNil(dict["thumbnailUri"])
+    XCTAssertNil(dict["thumbnailWidth"])
+    XCTAssertNil(dict["thumbnailHeight"])
+  }
+
   func testErrorCodesMatchThePublicContract() {
     XCTAssertEqual(PickerError.permission.code, "permission")
     XCTAssertEqual(PickerError.cameraUnavailable.code, "camera_unavailable")

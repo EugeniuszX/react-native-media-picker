@@ -10,6 +10,9 @@ export type Asset = {
   height?: number;
   duration?: number;
   base64?: string;
+  thumbnailUri?: string;
+  thumbnailWidth?: number;
+  thumbnailHeight?: number;
 };
 
 export type ErrorCode = 'permission' | 'camera_unavailable' | 'others';
@@ -29,6 +32,7 @@ export type NativeLibraryOptions = {
   includeBase64: boolean;
   format: string;
   mediaType: string;
+  includeThumbnail: boolean;
 };
 
 export type NativeCameraOptions = {

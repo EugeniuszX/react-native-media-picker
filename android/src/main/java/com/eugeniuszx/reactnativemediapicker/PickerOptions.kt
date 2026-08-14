@@ -36,6 +36,7 @@ internal data class LibraryOptions(
   val includeBase64: Boolean,
   val format: RequestedFormat,
   val mediaType: RequestedMediaType,
+  val includeThumbnail: Boolean,
 ) {
   companion object {
     fun from(map: ReadableMap) = LibraryOptions(
@@ -46,6 +47,7 @@ internal data class LibraryOptions(
       includeBase64 = map.getBoolean("includeBase64"),
       format = RequestedFormat.from(map.getString("format")),
       mediaType = RequestedMediaType.from(map.getString("mediaType")),
+      includeThumbnail = map.getBoolean("includeThumbnail"),
     )
   }
 }

@@ -10,7 +10,14 @@ describe('normalizeLibraryOptions', () => {
       includeBase64: false,
       format: 'original',
       mediaType: 'photo',
+      includeThumbnail: false,
     });
+  });
+
+  it('passes through includeThumbnail', () => {
+    expect(
+      normalizeLibraryOptions({ includeThumbnail: true }).includeThumbnail
+    ).toBe(true);
   });
 
   it('clamps quality into the 0..1 range', () => {

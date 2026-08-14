@@ -33,5 +33,10 @@ internal object ResponseFactory {
     putInt("height", asset.height)
     asset.base64?.let { putString("base64", it) }
     asset.durationSeconds?.let { putDouble("duration", it) }
+    asset.thumbnail?.let {
+      putString("thumbnailUri", it.uri)
+      putInt("thumbnailWidth", it.width)
+      putInt("thumbnailHeight", it.height)
+    }
   }
 }
