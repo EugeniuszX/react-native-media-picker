@@ -74,6 +74,20 @@ static NSDictionary *RNMediaPickerBuildResponse(NSArray<NSDictionary<NSString *,
     }];
 }
 
+- (void)getCameraPermissionStatus:(RCTPromiseResolveBlock)resolve
+                           reject:(RCTPromiseRejectBlock)reject
+{
+    resolve([_coordinator getCameraPermissionStatus]);
+}
+
+- (void)requestCameraPermission:(RCTPromiseResolveBlock)resolve
+                         reject:(RCTPromiseRejectBlock)reject
+{
+    [_coordinator requestCameraPermissionWithCompletion:^(NSString *status) {
+        resolve(status);
+    }];
+}
+
 - (void)cleanTempFiles:(RCTPromiseResolveBlock)resolve
                 reject:(RCTPromiseRejectBlock)reject
 {

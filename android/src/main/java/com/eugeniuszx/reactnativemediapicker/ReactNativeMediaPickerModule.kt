@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 
 class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationContext) :
   NativeReactNativeMediaPickerSpec(reactContext),
@@ -111,6 +112,24 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
       )
     } catch (e: Throwable) {
       fail(PickerError.OTHERS, e.message ?: "failed to request camera permission")
+    }
+  }
+
+  override fun getCameraPermissionStatus(promise: Promise) {
+    promise.resolve(permissions.status(reactContext.currentActivity).value)
+  }
+
+  override fun requestCameraPermission(promise: Promise) {
+    val settled = AtomicBoolean(false)
+    try {
+      permissions.request(reactContext.currentActivity) { status ->
+        if (settled.compareAndSet(false, true)) promise.resolve(status.value)
+      }
+    } catch (e: Throwable) {
+      Log.w(NAME, "failed to request the camera permission", e)
+      if (settled.compareAndSet(false, true)) {
+        promise.resolve(permissions.status(reactContext.currentActivity).value)
+      }
     }
   }
 

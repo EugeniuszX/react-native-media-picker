@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import UIKit
 
@@ -78,6 +79,37 @@ import UIKit
     }
     if !picker.start() {
       finish(nil, false, .cameraUnavailable, "Camera is not available on this device")
+    }
+  }
+
+  @objc public func getCameraPermissionStatus() -> String {
+    Self.currentPermission().rawValue
+  }
+
+  @objc public func requestCameraPermission(completion: @escaping (String) -> Void) {
+    guard Self.currentPermission() == .notDetermined else {
+      completion(Self.currentPermission().rawValue)
+      return
+    }
+    AVCaptureDevice.requestAccess(for: .video) { _ in
+      completion(Self.currentPermission().rawValue)
+    }
+  }
+
+  private static func currentPermission() -> CameraPermission {
+    CameraPermission.resolve(
+      hasCamera: AVCaptureDevice.default(for: .video) != nil,
+      authorization: authorization(of: AVCaptureDevice.authorizationStatus(for: .video))
+    )
+  }
+
+  private static func authorization(of status: AVAuthorizationStatus) -> CameraAuthorization {
+    switch status {
+    case .authorized: return .authorized
+    case .notDetermined: return .notDetermined
+    case .denied: return .denied
+    case .restricted: return .restricted
+    @unknown default: return .unknown
     }
   }
 

@@ -92,6 +92,32 @@ export const launchCamera = (
 ): Promise<PickerResponse> =>
   NativeMediaPicker.launchCamera(normalizeCameraOptions(options));
 
+/**
+ * `'denied'` is only ever reported on Android — iOS gives an app one chance to ask, so a refusal
+ * there is reported as `'blocked'`. `'not_required'` is Android-only too: it means the app does not
+ * declare `android.permission.CAMERA`, so capturing needs no runtime permission at all.
+ * `'unavailable'` means the device has no camera.
+ */
+export type CameraPermissionStatus =
+  | 'granted'
+  | 'not_determined'
+  | 'denied'
+  | 'blocked'
+  | 'not_required'
+  | 'unavailable';
+
+/** Reads the current status without ever showing a permission prompt. */
+export const getCameraPermissionStatus = (): Promise<CameraPermissionStatus> =>
+  NativeMediaPicker.getCameraPermissionStatus() as Promise<CameraPermissionStatus>;
+
+/**
+ * Shows the system permission prompt when it can still be answered, and resolves the status the
+ * user leaves it in. Resolves without prompting when the answer is already settled — `'granted'`,
+ * `'blocked'`, `'not_required'` or `'unavailable'`.
+ */
+export const requestCameraPermission = (): Promise<CameraPermissionStatus> =>
+  NativeMediaPicker.requestCameraPermission() as Promise<CameraPermissionStatus>;
+
 export const cleanTempFiles = (): Promise<number> =>
   NativeMediaPicker.cleanTempFiles();
 
