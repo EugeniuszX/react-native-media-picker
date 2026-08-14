@@ -58,6 +58,9 @@ On Android, "unlimited" is capped by the system Photo Picker:
 `selectionLimit: 0` requests `MediaStore.getPickImagesMaxLimit()`, and any larger
 explicit limit is clamped to it. iOS has no such cap.
 
+On iOS, `assets` follows the order the user tapped the items in. On Android the
+order is the one the system picker reports.
+
 ## `Asset`
 
 Each picked item resolves to: `uri` (a `file://` path to a temp file), `type`
@@ -77,6 +80,16 @@ it is derived), `fileName` (extension matches `type`), `fileSize`, `width`,
 them. Both native modules do populate all four today, but `width` and `height`
 are reported as `0` when the image or video metadata cannot be read — treat `0`
 as "unknown", not as a real dimension.
+
+`fileName` is the name the item carries in the gallery, carrying the extension of
+the file actually written — `IMG_4821.HEIC` picked with `format: 'jpeg'` comes
+back as `IMG_4821.jpg`. It is a label for uploads and UI, never a path: the bytes
+always live at `uri`, under a generated name. It arrives sanitized (path
+separators, control characters and leading dots are dropped, and the name is
+capped at 100 characters plus the extension), and when nothing usable survives —
+or the system reports no name at all, which is always the case for **camera
+captures** — it falls back to the temp file's own `media_picker_<uuid>.<ext>`.
+Two picked items can carry the same `fileName`, so use `uri` as the identity.
 
 `width` and `height` are the dimensions **as displayed** — the EXIF orientation
 is already applied. For an image whose orientation is a quarter turn they are
@@ -118,6 +131,14 @@ With the default `format: 'original'` the source format is preserved:
   example AVIF) are currently treated as JPEG, so `format: 'jpeg'` returns them
   unchanged rather than transcoding them; the guarantee covers the formats
   listed in the [`Asset`](#asset) section.
+
+On iOS the system is willing to transcode a photo while exporting it from the
+library, so a HEIC can arrive already turned into JPEG. With `format: 'original'`
+the library asks for the stored representation instead, which is both faster and
+what "original" promises — expect `image/heic` for HEIC photos where an earlier
+version sometimes handed you `image/jpeg`. Ask for `format: 'jpeg'` when your
+backend needs JPEG; the export is then left to the system, which is free to pick
+whichever representation it can produce fastest.
 
 ### Video assets
 
@@ -228,6 +249,49 @@ video recording. Videos come from the library picker — see
 - **iOS:** add `NSCameraUsageDescription` to your app's `Info.plist`. iOS shows the permission prompt automatically; the app crashes at launch of the camera if the key is missing. If the user denies access, `launchCamera` resolves `{ didCancel: false, errorCode: 'permission' }`.
 - **Android:** if your app declares `android.permission.CAMERA` in its manifest, this library requests it at runtime before opening the camera (a denial resolves `{ didCancel: false, errorCode: 'permission' }`). If your app does **not** declare `CAMERA`, the system camera app is launched without any runtime permission.
 
+`launchCamera` handles all of this on its own. Reach for the two calls below when
+you want to explain yourself before the system prompt appears, or to gate a
+camera button on the current status:
+
+```ts
+import {
+  getCameraPermissionStatus,
+  requestCameraPermission,
+} from '@eugeniuszx/react-native-media-picker';
+
+if ((await getCameraPermissionStatus()) === 'blocked') {
+  // Only Settings can undo this — send the user there instead of asking again.
+} else {
+  const status = await requestCameraPermission();
+}
+```
+
+`getCameraPermissionStatus` never prompts. `requestCameraPermission` shows the
+system prompt only when it can still be answered (`'not_determined'` or
+`'denied'`) and resolves the status the user leaves it in; every other status is
+returned as-is, without a dialog. Neither call rejects, and neither is needed to
+use `launchCamera`.
+
+`CameraPermissionStatus` is exported from the package:
+
+| Status | Meaning |
+|---|---|
+| `'granted'` | Capture is allowed |
+| `'not_determined'` | Never asked — asking will show the prompt |
+| `'denied'` | Refused, but asking again still shows the prompt. **Android only** |
+| `'blocked'` | Refused for good (or restricted by policy); only Settings can change it. iOS reports every refusal here, since it allows one ask per install |
+| `'not_required'` | The app does not declare `android.permission.CAMERA`, so no runtime permission is involved. **Android only** |
+| `'unavailable'` | The device has no camera |
+
+Two details worth knowing on Android: distinguishing `'denied'` from `'blocked'`
+relies on this library remembering that it has asked, so a status read after the
+app's data is cleared reports `'not_determined'` again; and a status read while no
+activity is in the foreground reports `'blocked'` rather than `'denied'` for a
+refused permission, because the rationale flag cannot be read from the background.
+`'unavailable'` covers missing camera hardware — a device that has a camera but no
+app able to handle the capture intent still reports its real permission status
+here and surfaces as `errorCode: 'camera_unavailable'` from `launchCamera`.
+
 ## Response & error handling
 
 `launchImageLibrary` and `launchCamera` **never reject** — they always resolve a `PickerResponse`:
@@ -271,9 +335,8 @@ await cleanTempFiles();
 
 `cleanTempFiles` deletes every temp file this library has produced, so it
 invalidates every `uri` handed out earlier — call it once you are done with them.
-It never rejects. The returned promise resolves as soon as the sweep is
-scheduled, not once the files are gone, so treat it as "these URIs are now
-unusable" rather than as a completed deletion.
+It never rejects, and resolves once the sweep has finished with the number of
+files it deleted.
 
 **Do not call it while a pick is in flight.** The sweep empties the whole
 directory, including files the running pick is still using. On Android it
@@ -299,15 +362,15 @@ await releaseAssets(asset.uri); // one uri
 It accepts an asset, a `uri` string, or an array mixing both. Passing an asset
 also releases its `thumbnailUri`, which a bare `uri` string would leave behind.
 Duplicates and empty entries are dropped, and an empty list never reaches the
-native module.
+native module — it resolves `0` right away.
 
 Only files inside the library's own `rn-media-picker` directory can be deleted:
 a `uri` pointing anywhere else — or one this library did not hand out — is
 ignored rather than acted on. Non-`file://` uris are ignored too.
 
-Like `cleanTempFiles`, it never rejects, and the promise resolves once the
-deletion is scheduled rather than once the files are gone. The same warning
-applies: do not call it while a pick is in flight.
+Like `cleanTempFiles`, it never rejects, and resolves with the number of files
+deleted once they are gone. A `uri` it declines to touch simply is not counted.
+The same warning applies: do not call it while a pick is in flight.
 
 Upgrading from 0.2.x: temp files written by earlier versions went straight into
 the cache/temp directory rather than the `rn-media-picker` subdirectory, so
@@ -364,8 +427,9 @@ jest.mock('@eugeniuszx/react-native-media-picker', () =>
 );
 ```
 
-Every entry point (`launchImageLibrary`, `launchCamera`, `cleanTempFiles`,
-`releaseAssets`) becomes a `jest.fn()` resolving `{ didCancel: true }`, so
+Every entry point becomes a `jest.fn()`: `launchImageLibrary` and `launchCamera`
+resolve `{ didCancel: true }`, `cleanTempFiles` and `releaseAssets` resolve `0`,
+and `getCameraPermissionStatus`/`requestCameraPermission` resolve `'granted'`. So
 stage a result per test:
 
 ```ts
@@ -380,6 +444,32 @@ import { launchImageLibrary } from '@eugeniuszx/react-native-media-picker';
 The mock covers the entry points only — the pure option helpers
 (`normalizeLibraryOptions`, `collectReleasableUris`) are not re-exported,
 since they need no mocking.
+
+## Upgrading from 1.3.x
+
+Everything new is additive, but four behaviours changed. None of them alters a
+type, so TypeScript will not point them out for you.
+
+- **`Asset.fileName` is now the name from the gallery**, not the temp file's
+  generated name — `IMG_4821.jpg` instead of `media_picker_<uuid>.jpg`. The
+  extension still matches `type`, and `uri` is unchanged. Code that reconstructed
+  a path from `fileName` was already relying on something it should not; use
+  `uri`. Camera captures keep the generated name.
+- **On iOS, picked assets now come back in tap order** rather than in library
+  order. If you were re-sorting them yourself to get that, you can stop.
+- **On iOS with `format: 'original'`, HEIC photos now stay HEIC more often.**
+  Earlier the system was free to hand over a JPEG it transcoded itself; the
+  library now asks for the stored representation. Pass `format: 'jpeg'` if you
+  need JPEG — see [Format handling](#format-handling).
+- **`cleanTempFiles()` and `releaseAssets()` resolve `Promise<number>`** — the
+  number of files deleted — and only once the files are actually gone, instead of
+  as soon as the sweep was scheduled. Awaiting them is now meaningful; code that
+  ignored the result keeps working.
+
+New: [`getCameraPermissionStatus()` and `requestCameraPermission()`](#camera-permissions).
+`peerDependencies` now state the versions the library has always needed
+(`react-native >= 0.76`, `react >= 18.2`), so a mismatched install warns instead
+of failing at runtime.
 
 ## Migrating from 0.2.x
 

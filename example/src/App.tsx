@@ -10,9 +10,11 @@ import {
 } from 'react-native';
 import {
   cleanTempFiles,
+  getCameraPermissionStatus,
   launchCamera,
   launchImageLibrary,
   releaseAssets,
+  requestCameraPermission,
   type Asset,
   type CameraType,
   type MediaType,
@@ -97,9 +99,9 @@ export default function App() {
   const clear = () => {
     setStatus('cleaning temp files…');
     cleanTempFiles()
-      .then(() => {
+      .then((removed) => {
         setAssets([]);
-        setStatus('temp files cleaned');
+        setStatus(`temp files cleaned (${removed} removed)`);
       })
       .catch((e: unknown) => {
         setStatus(`threw: ${String(e)}`);
@@ -109,9 +111,30 @@ export default function App() {
   const release = (asset: Asset) => {
     setStatus('releasing…');
     releaseAssets(asset)
-      .then(() => {
+      .then((removed) => {
         setAssets((current) => current.filter((a) => a.uri !== asset.uri));
-        setStatus('released one asset');
+        setStatus(`released one asset (${removed} file(s) removed)`);
+      })
+      .catch((e: unknown) => {
+        setStatus(`threw: ${String(e)}`);
+      });
+  };
+
+  const readPermission = () => {
+    getCameraPermissionStatus()
+      .then((permission) => {
+        setStatus(`camera permission: ${permission}`);
+      })
+      .catch((e: unknown) => {
+        setStatus(`threw: ${String(e)}`);
+      });
+  };
+
+  const askPermission = () => {
+    setStatus('requesting camera permission…');
+    requestCameraPermission()
+      .then((permission) => {
+        setStatus(`camera permission: ${permission}`);
       })
       .catch((e: unknown) => {
         setStatus(`threw: ${String(e)}`);
@@ -131,6 +154,8 @@ export default function App() {
           title="Toggle front/back"
           onPress={() => setFacing((f) => (f === 'back' ? 'front' : 'back'))}
         />
+        <Button title="Read camera permission" onPress={readPermission} />
+        <Button title="Request camera permission" onPress={askPermission} />
         <Button title="Clean temp files" onPress={clear} />
         <Text style={styles.status}>{status}</Text>
         {assets.map((a) => (
@@ -151,6 +176,7 @@ export default function App() {
               </>
             )}
             <Text>{`${a.type} • ${a.width}x${a.height} • ${a.fileSize ?? '?'}B`}</Text>
+            <Text numberOfLines={1}>{`name: ${a.fileName ?? 'none'}`}</Text>
             <Text numberOfLines={1}>{a.uri}</Text>
             <Text>{`base64: ${a.base64 ? `${a.base64.length} chars` : 'none'}`}</Text>
             <Text>{`thumbnail: ${
