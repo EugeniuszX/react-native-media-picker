@@ -1,12 +1,37 @@
 import NativeMediaPicker, {
   type Asset,
   type ErrorCode,
+  type Exif,
   type NativeCameraOptions,
   type NativeLibraryOptions,
-  type PickerResponse,
 } from './NativeReactNativeMediaPicker';
 
-export type { Asset, ErrorCode, PickerResponse };
+export type { Asset, ErrorCode, Exif };
+
+/**
+ * Every member spells out the other members' fields as `?: undefined`, so reading
+ * `response.assets` on an un-narrowed value still compiles exactly as it did in 1.4.x,
+ * while `if (didCancel) … if (errorCode) …` now narrows `assets` to `Asset[]`.
+ */
+export type PickerResponse =
+  | {
+      didCancel: true;
+      assets?: undefined;
+      errorCode?: undefined;
+      errorMessage?: undefined;
+    }
+  | {
+      didCancel: false;
+      assets: Asset[];
+      errorCode?: undefined;
+      errorMessage?: undefined;
+    }
+  | {
+      didCancel: false;
+      assets?: undefined;
+      errorCode: ErrorCode;
+      errorMessage: string;
+    };
 
 export type OutputFormat = 'original' | 'jpeg' | 'png';
 
@@ -67,7 +92,9 @@ export const normalizeLibraryOptions = (
 export const launchImageLibrary = (
   options: LibraryOptions = {}
 ): Promise<PickerResponse> =>
-  NativeMediaPicker.launchImageLibrary(normalizeLibraryOptions(options));
+  NativeMediaPicker.launchImageLibrary(
+    normalizeLibraryOptions(options)
+  ) as Promise<PickerResponse>;
 
 export const normalizeCameraOptions = (
   options: CameraOptions
@@ -90,7 +117,9 @@ export const normalizeCameraOptions = (
 export const launchCamera = (
   options: CameraOptions = {}
 ): Promise<PickerResponse> =>
-  NativeMediaPicker.launchCamera(normalizeCameraOptions(options));
+  NativeMediaPicker.launchCamera(
+    normalizeCameraOptions(options)
+  ) as Promise<PickerResponse>;
 
 /**
  * `'denied'` is only ever reported on Android — iOS gives an app one chance to ask, so a refusal

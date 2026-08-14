@@ -30,9 +30,9 @@ export type Asset = {
   exif?: Exif;
 };
 
-export type ErrorCode = 'permission' | 'camera_unavailable' | 'others';
+export type ErrorCode = 'permission' | 'camera_unavailable' | 'busy' | 'others';
 
-export type PickerResponse = {
+export type NativePickerResponse = {
   didCancel: boolean;
   errorCode?: ErrorCode;
   errorMessage?: string;
@@ -60,8 +60,10 @@ export type NativeCameraOptions = {
 };
 
 export interface Spec extends TurboModule {
-  launchImageLibrary(options: NativeLibraryOptions): Promise<PickerResponse>;
-  launchCamera(options: NativeCameraOptions): Promise<PickerResponse>;
+  launchImageLibrary(
+    options: NativeLibraryOptions
+  ): Promise<NativePickerResponse>;
+  launchCamera(options: NativeCameraOptions): Promise<NativePickerResponse>;
   cleanTempFiles(): Promise<number>;
   releaseAssets(uris: Array<string>): Promise<number>;
   getCameraPermissionStatus(): Promise<string>;
