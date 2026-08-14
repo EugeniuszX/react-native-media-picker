@@ -353,6 +353,34 @@ runtime, and without it the system camera app needs no permission at all — see
 The plugin adds no runtime dependency; it resolves `expo/config-plugins` from
 your app, and non-Expo projects never load it.
 
+## Testing
+
+Jest cannot load a TurboModule, so mock the package. A ready-made mock ships
+with it:
+
+```ts
+jest.mock('@eugeniuszx/react-native-media-picker', () =>
+  require('@eugeniuszx/react-native-media-picker/jest/mock')
+);
+```
+
+Every entry point (`launchImageLibrary`, `launchCamera`, `cleanTempFiles`,
+`releaseAssets`) becomes a `jest.fn()` resolving `{ didCancel: true }`, so
+stage a result per test:
+
+```ts
+import { launchImageLibrary } from '@eugeniuszx/react-native-media-picker';
+
+(launchImageLibrary as jest.Mock).mockResolvedValueOnce({
+  didCancel: false,
+  assets: [{ uri: 'file:///tmp/a.jpg', type: 'image/jpeg' }],
+});
+```
+
+The mock covers the entry points only — the pure option helpers
+(`normalizeLibraryOptions`, `collectReleasableUris`) are not re-exported,
+since they need no mocking.
+
 ## Migrating from 0.2.x
 
 - `LibraryOptions.mediaType` is back (it was removed because it was never
