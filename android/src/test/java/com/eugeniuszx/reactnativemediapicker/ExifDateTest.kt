@@ -25,4 +25,10 @@ class ExifDateTest {
     assertNull(ExifDate.iso8601("20xx:08:14 15:29:03"))
     assertNull(ExifDate.iso8601("2026:8:14 15:29:03"))
   }
+
+  /** `\d` is ASCII-only here; this guards against a regression if anyone widens the pattern. */
+  @Test fun rejectsNonAsciiDigits() {
+    assertNull(ExifDate.iso8601("٢٠٢٦:٠٨:١٤ ١٥:٢٩:٠٣"))
+    assertNull(ExifDate.iso8601("2026:08:1٤ 15:29:03"))
+  }
 }

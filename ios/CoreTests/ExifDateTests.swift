@@ -23,4 +23,11 @@ final class ExifDateTests: XCTestCase {
     XCTAssertNil(ExifDate.iso8601(from: "20xx:08:14 15:29:03"))
     XCTAssertNil(ExifDate.iso8601(from: "2026:8:14 15:29:03"))
   }
+
+  /// `Character.isNumber` covers every Unicode number category, so the digit check has to be
+  /// ASCII-only to stay in step with the Kotlin unit and with the ISO-8601 output contract.
+  func testRejectsNonAsciiDigits() {
+    XCTAssertNil(ExifDate.iso8601(from: "٢٠٢٦:٠٨:١٤ ١٥:٢٩:٠٣"))
+    XCTAssertNil(ExifDate.iso8601(from: "2026:08:1٤ 15:29:03"))
+  }
 }

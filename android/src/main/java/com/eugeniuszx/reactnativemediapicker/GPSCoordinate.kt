@@ -16,6 +16,9 @@ internal object GPSCoordinate {
       magnitude += value / divisors[index]
     }
 
+    // `toDoubleOrNull` accepts `Infinity` and `NaN`; neither is a coordinate.
+    if (!magnitude.isFinite()) return null
+
     val hemisphere = ref?.trim()?.uppercase()
     val negative = hemisphere == "S" || hemisphere == "W"
     return if (negative) -magnitude else magnitude
@@ -24,6 +27,7 @@ internal object GPSCoordinate {
   /** `GPSAltitudeRef` is `"1"` when the altitude is below sea level, `"0"` (or absent) above it. */
   fun altitude(rational: String?, ref: String?): Double? {
     val value = rationalToDouble(rational ?: return null) ?: return null
+    if (!value.isFinite()) return null
     return if (ref?.trim() == "1") -value else value
   }
 

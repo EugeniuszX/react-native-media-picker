@@ -32,6 +32,13 @@ class GPSCoordinateTest {
     assertNull(GPSCoordinate.decimal("a/1,27/1,36/100", "N"))
   }
 
+  /** `toDoubleOrNull` accepts `Infinity` and `NaN`; a coordinate may never be either. */
+  @Test fun rejectsNonFiniteDegrees() {
+    assertNull(GPSCoordinate.decimal("Infinity/1,27/1,36/100", "N"))
+    assertNull(GPSCoordinate.decimal("50/1,NaN/1,36/100", "N"))
+    assertNull(GPSCoordinate.decimal("-Infinity/1,27/1,36/100", "S"))
+  }
+
   @Test fun altitudeRefOneMeansBelowSeaLevel() {
     assertEquals(150.0, GPSCoordinate.altitude("150/1", "0")!!, 1e-9)
     assertEquals(-150.0, GPSCoordinate.altitude("150/1", "1")!!, 1e-9)
@@ -43,5 +50,10 @@ class GPSCoordinateTest {
     assertNull(GPSCoordinate.altitude(null, "0"))
     assertNull(GPSCoordinate.altitude("150", "0"))
     assertNull(GPSCoordinate.altitude("150/0", "0"))
+  }
+
+  @Test fun rejectsNonFiniteAltitude() {
+    assertNull(GPSCoordinate.altitude("Infinity/1", "0"))
+    assertNull(GPSCoordinate.altitude("NaN/1", "0"))
   }
 }

@@ -16,7 +16,11 @@ enum ExifDate {
     let widths = [4, 2, 2, 2, 2, 2]
     let fields = date + time
     for (field, width) in zip(fields, widths) {
-      guard field.count == width, field.allSatisfy(\.isNumber) else { return nil }
+      // ASCII-only: `isNumber` alone also accepts Arabic-Indic digits and other Unicode number
+      // categories, which the Kotlin unit's `\d` rejects and ISO-8601 has no place for.
+      guard field.count == width, field.allSatisfy({ $0.isASCII && $0.isNumber }) else {
+        return nil
+      }
     }
     // Cameras write an all-zero placeholder when the clock was never set.
     guard date[0] != "0000" else { return nil }
