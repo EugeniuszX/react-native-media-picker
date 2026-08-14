@@ -12,6 +12,7 @@ import {
   cleanTempFiles,
   launchCamera,
   launchImageLibrary,
+  releaseAssets,
   type Asset,
   type CameraType,
   type MediaType,
@@ -50,7 +51,7 @@ export default function App() {
 
   const pickMedia = (mediaType: MediaType) => {
     setStatus(`picking ${mediaType}…`);
-    launchImageLibrary({ selectionLimit: 3, mediaType })
+    launchImageLibrary({ selectionLimit: 3, mediaType, includeThumbnail: true })
       .then((res) => {
         if (res.didCancel) {
           setStatus('cancelled');
@@ -105,6 +106,18 @@ export default function App() {
       });
   };
 
+  const release = (asset: Asset) => {
+    setStatus('releasing…');
+    releaseAssets(asset)
+      .then(() => {
+        setAssets((current) => current.filter((a) => a.uri !== asset.uri));
+        setStatus('released one asset');
+      })
+      .catch((e: unknown) => {
+        setStatus(`threw: ${String(e)}`);
+      });
+  };
+
   return (
     <SafeAreaView style={styles.root}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -125,13 +138,27 @@ export default function App() {
             {a.type.startsWith('image/') ? (
               <Image source={{ uri: a.uri }} style={styles.image} />
             ) : (
-              <Text style={styles.status}>{`🎬 video${
-                a.duration != null ? ` • ${a.duration.toFixed(1)}s` : ''
-              }`}</Text>
+              <>
+                {a.thumbnailUri ? (
+                  <Image
+                    source={{ uri: a.thumbnailUri }}
+                    style={styles.image}
+                  />
+                ) : null}
+                <Text style={styles.status}>{`🎬 video${
+                  a.duration != null ? ` • ${a.duration.toFixed(1)}s` : ''
+                }`}</Text>
+              </>
             )}
             <Text>{`${a.type} • ${a.width}x${a.height} • ${a.fileSize ?? '?'}B`}</Text>
             <Text numberOfLines={1}>{a.uri}</Text>
             <Text>{`base64: ${a.base64 ? `${a.base64.length} chars` : 'none'}`}</Text>
+            <Text>{`thumbnail: ${
+              a.thumbnailUri
+                ? `${a.thumbnailWidth}x${a.thumbnailHeight}`
+                : 'none'
+            }`}</Text>
+            <Button title="Release this asset" onPress={() => release(a)} />
           </View>
         ))}
       </ScrollView>

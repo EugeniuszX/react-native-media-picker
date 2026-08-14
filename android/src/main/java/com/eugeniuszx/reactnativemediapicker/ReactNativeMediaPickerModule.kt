@@ -8,7 +8,9 @@ import androidx.core.content.FileProvider
 import com.facebook.react.bridge.ActivityEventListener
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
+import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.ReadableMap
+import com.facebook.react.bridge.ReadableType
 import com.facebook.react.bridge.WritableMap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -125,6 +127,29 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
     }
   }
 
+  override fun releaseAssets(uris: ReadableArray, promise: Promise) {
+    val names = buildList {
+      for (index in 0 until uris.size()) {
+        if (uris.getType(index) == ReadableType.String) {
+          uris.getString(index)?.let { add(it) }
+        }
+      }
+    }
+
+    promise.resolve(null)
+    if (names.isEmpty()) return
+
+    moduleScope.launch {
+      try {
+        tempFiles.remove(names)
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        Log.w(NAME, "failed to release temp files", e)
+      }
+    }
+  }
+
   private fun launchCameraIntent(options: CameraOptions) {
     val activity = reactContext.currentActivity
     if (activity == null) {
@@ -195,7 +220,7 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
             gate.withPermit {
               try {
                 if (options.mediaType != RequestedMediaType.PHOTO && isVideoContent(uri)) {
-                  videoProcessor.process(uri)
+                  videoProcessor.process(uri, options.includeThumbnail)
                 } else {
                   processor.process(
                     uri,

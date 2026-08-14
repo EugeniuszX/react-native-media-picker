@@ -93,7 +93,11 @@ final class LibraryPicker: NSObject, PHPickerViewControllerDelegate {
               return
             }
             guard let url,
-              let payload = self.videoProcessor.process(sourceURL: url, uti: movieUTI)
+              let payload = self.videoProcessor.process(
+                sourceURL: url,
+                uti: movieUTI,
+                includeThumbnail: self.options.includeThumbnail
+              )
             else { return }
             lock.lock()
             slots[index] = payload

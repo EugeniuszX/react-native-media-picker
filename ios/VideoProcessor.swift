@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import UIKit
 
 final class VideoProcessor {
   private let tempFiles: TempFileStore
@@ -8,7 +9,7 @@ final class VideoProcessor {
     self.tempFiles = tempFiles
   }
 
-  func process(sourceURL: URL, uti: String) -> AssetPayload? {
+  func process(sourceURL: URL, uti: String, includeThumbnail: Bool = false) -> AssetPayload? {
     let format = VideoFormat.from(uti: uti)
     guard let destination = try? tempFiles.makeFileURL(fileExtension: format.fileExtension)
     else { return nil }
@@ -44,7 +45,45 @@ final class VideoProcessor {
       width: width,
       height: height,
       base64: nil,
-      duration: seconds.isFinite && seconds > 0 ? seconds : nil
+      duration: seconds.isFinite && seconds > 0 ? seconds : nil,
+      thumbnail: includeThumbnail ? makeThumbnail(for: asset) : nil
+    )
+  }
+
+  private func makeThumbnail(for asset: AVURLAsset) -> Thumbnail? {
+    let generator = AVAssetImageGenerator(asset: asset)
+    generator.appliesPreferredTrackTransform = true
+    generator.maximumSize = CGSize(
+      width: ThumbnailPlan.maxDimension,
+      height: ThumbnailPlan.maxDimension
+    )
+    generator.requestedTimeToleranceBefore = .zero
+    generator.requestedTimeToleranceAfter = CMTime(seconds: 1, preferredTimescale: 600)
+
+    guard let frame = try? generator.copyCGImage(at: .zero, actualTime: nil) else {
+      NSLog("[ReactNativeMediaPicker] failed to generate a video thumbnail")
+      return nil
+    }
+
+    guard
+      let data = UIImage(cgImage: frame).jpegData(
+        compressionQuality: ThumbnailPlan.jpegQuality),
+      let destination = try? tempFiles.makeFileURL(fileExtension: "jpg")
+    else { return nil }
+
+    do {
+      try data.write(to: destination)
+    } catch {
+      NSLog(
+        "[ReactNativeMediaPicker] failed to write a video thumbnail: %@",
+        error.localizedDescription)
+      return nil
+    }
+
+    return Thumbnail(
+      uri: destination.absoluteString,
+      width: frame.width,
+      height: frame.height
     )
   }
 }

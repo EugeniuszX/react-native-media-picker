@@ -26,6 +26,19 @@ struct TempFileStore {
   }
 
   @discardableResult
+  func remove(uris: [String]) -> Int {
+    let names = Set(uris.compactMap(Self.fileName(forURI:)))
+    guard !names.isEmpty else { return 0 }
+    return remove { names.contains($0.lastPathComponent) }
+  }
+
+  static func fileName(forURI uri: String) -> String? {
+    guard let url = URL(string: uri), url.isFileURL else { return nil }
+    let name = url.lastPathComponent
+    return name.isEmpty || name == "/" ? nil : name
+  }
+
+  @discardableResult
   func removeFiles(olderThan age: TimeInterval, now: Date = Date()) -> Int {
     remove { url in
       let values = try? url.resourceValues(forKeys: [.contentModificationDateKey])

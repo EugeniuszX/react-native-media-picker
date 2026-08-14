@@ -59,6 +59,58 @@ final class TempFileStoreTests: XCTestCase {
     XCTAssertEqual(store.removeAll(), 0)
   }
 
+  func testRemoveByURIDeletesOnlyTheNamedFiles() throws {
+    let store = TempFileStore(parent: parent)
+    let released = try store.makeFileURL(fileExtension: "mp4")
+    try Data([0x01]).write(to: released)
+    let kept = try store.makeFileURL(fileExtension: "jpg")
+    try Data([0x01]).write(to: kept)
+
+    XCTAssertEqual(store.remove(uris: [released.absoluteString]), 1)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: released.path))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: kept.path))
+  }
+
+  func testRemoveByURIIgnoresFilesOutsideThePickerDirectory() throws {
+    let store = TempFileStore(parent: parent)
+    let outsider = parent.appendingPathComponent("not-ours.jpg")
+    try Data([0x01]).write(to: outsider)
+
+    XCTAssertEqual(store.remove(uris: [outsider.absoluteString]), 0)
+    XCTAssertTrue(FileManager.default.fileExists(atPath: outsider.path))
+  }
+
+  func testRemoveByURIIgnoresTraversalAndNonFileURIs() throws {
+    let store = TempFileStore(parent: parent)
+    let kept = try store.makeFileURL(fileExtension: "jpg")
+    try Data([0x01]).write(to: kept)
+
+    let outsider = parent.appendingPathComponent("not-ours.jpg")
+    try Data([0x01]).write(to: outsider)
+
+    let traversal = "file://\(parent.path)/rn-media-picker/../not-ours.jpg"
+    XCTAssertEqual(
+      store.remove(uris: [traversal, "https://example.com/a.jpg", "", "not a uri at all"]),
+      0
+    )
+    XCTAssertTrue(FileManager.default.fileExists(atPath: outsider.path))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: kept.path))
+  }
+
+  func testRemoveByURIWithNoUsableEntriesIsANoOp() {
+    let store = TempFileStore(parent: parent)
+    XCTAssertEqual(store.remove(uris: []), 0)
+  }
+
+  func testFileNameForURIDecodesPercentEscapes() {
+    XCTAssertEqual(
+      TempFileStore.fileName(forURI: "file:///tmp/media%20picker.jpg"),
+      "media picker.jpg"
+    )
+    XCTAssertNil(TempFileStore.fileName(forURI: "file:///"))
+    XCTAssertNil(TempFileStore.fileName(forURI: "content://media/external/1"))
+  }
+
   func testAgeBasedSweepKeepsRecentFiles() throws {
     let store = TempFileStore(parent: parent)
     let old = try store.makeFileURL(fileExtension: "jpg")

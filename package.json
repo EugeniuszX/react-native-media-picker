@@ -10,6 +10,8 @@
       "types": "./lib/typescript/src/index.d.ts",
       "default": "./lib/module/index.js"
     },
+    "./app.plugin.js": "./app.plugin.js",
+    "./jest/mock": "./jest/mock.js",
     "./package.json": "./package.json"
   },
   "files": [
@@ -17,8 +19,9 @@
     "lib",
     "android",
     "ios",
+    "jest",
     "*.podspec",
-    "react-native.config.js",
+    "app.plugin.js",
     "!ios/build",
     "!ios/CoreTests",
     "!android/src/test",
@@ -44,7 +47,18 @@
   "keywords": [
     "react-native",
     "ios",
-    "android"
+    "android",
+    "image-picker",
+    "media-picker",
+    "photo-picker",
+    "camera",
+    "gallery",
+    "video",
+    "thumbnail",
+    "phpicker",
+    "turbo-module",
+    "new-architecture",
+    "expo"
   ],
   "repository": {
     "type": "git",
@@ -160,7 +174,8 @@
       "@release-it/conventional-changelog": {
         "preset": {
           "name": "angular"
-        }
+        },
+        "infile": "CHANGELOG.md"
       }
     }
   },

@@ -47,6 +47,7 @@ static NSDictionary *RNMediaPickerBuildResponse(NSArray<NSDictionary<NSString *,
                                                 format:options.format()
                                              mediaType:options.mediaType()
                                          includeBase64:options.includeBase64()
+                                      includeThumbnail:options.includeThumbnail()
                                             completion:^(NSArray<NSDictionary<NSString *, id> *> *assets,
                                                          BOOL didCancel,
                                                          NSString *errorCode,
@@ -77,6 +78,14 @@ static NSDictionary *RNMediaPickerBuildResponse(NSArray<NSDictionary<NSString *,
                 reject:(RCTPromiseRejectBlock)reject
 {
     [_coordinator cleanTempFiles];
+    resolve(nil);
+}
+
+- (void)releaseAssets:(NSArray *)uris
+              resolve:(RCTPromiseResolveBlock)resolve
+               reject:(RCTPromiseRejectBlock)reject
+{
+    [_coordinator releaseAssets:uris ?: @[]];
     resolve(nil);
 }
 

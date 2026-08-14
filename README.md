@@ -49,6 +49,7 @@ if (!result.didCancel && result.assets) {
 | `quality` | `number` | `1` | Re-encode quality 0..1 (JPEG/WebP/HEIC); ignored for lossless PNG, for video assets, and for animated images (unless an explicit `format` forces a first-frame re-encode) |
 | `format` | `'original' \| 'jpeg' \| 'png'` | `'original'` | Guarantee the output file type; `'original'` preserves the source format (see below); ignored for video assets |
 | `includeBase64` | `boolean` | `false` | adds `base64` to each asset; ignored for video assets |
+| `includeThumbnail` | `boolean` | `false` | adds `thumbnailUri` to each **video** asset (see [Video thumbnails](#video-thumbnails)); ignored for photos |
 
 Videos can be picked with `mediaType: 'video'` (or alongside photos with
 `'mixed'`) — see [Video assets](#video-assets).
@@ -65,8 +66,11 @@ Each picked item resolves to: `uri` (a `file://` path to a temp file), `type`
 `video/mp4`, `video/quicktime`, `video/webm` or `video/3gpp` for videos; see
 [Format handling](#format-handling) and [Video assets](#video-assets) for how
 it is derived), `fileName` (extension matches `type`), `fileSize`, `width`,
-`height`, `duration` (seconds, video assets only — absent for photos), and
-`base64` (only when `includeBase64` is true, photos only).
+`height`, `duration` (seconds, video assets only — absent for photos),
+`base64` (only when `includeBase64` is true, photos only), and
+`thumbnailUri`/`thumbnailWidth`/`thumbnailHeight` (only when
+`includeThumbnail` is true, video assets only — see
+[Video thumbnails](#video-thumbnails)).
 
 `uri` and `type` are the only fields declared non-optional. `fileName`,
 `fileSize`, `width` and `height` are typed `?:`, so TypeScript makes you narrow
@@ -162,6 +166,34 @@ Temp-file handling is identical to photos: the same `rn-media-picker`
 directory, the same 24-hour sweep, and `cleanTempFiles()` deletes video temp
 files too.
 
+### Video thumbnails
+
+`includeThumbnail: true` writes a poster frame for every **video** asset and
+adds `thumbnailUri`, `thumbnailWidth` and `thumbnailHeight` to it:
+
+```ts
+const result = await launchImageLibrary({
+  mediaType: 'video',
+  includeThumbnail: true,
+});
+
+// <Image source={{ uri: result.assets?.[0].thumbnailUri }} />
+```
+
+The thumbnail is a **JPEG** taken from the first renderable frame, fitted
+inside 512×512 (never scaled up), with the video's rotation metadata already
+applied. Its size is not configurable — `maxWidth`/`maxHeight`/`quality`/
+`format` describe the asset, not its preview. Photo assets never get one, and
+neither do camera captures.
+
+The thumbnail is a temp file in the same `rn-media-picker` directory, so it is
+covered by the 24-hour sweep and by `cleanTempFiles()`. Passing the asset to
+[`releaseAssets`](#releasing-individual-assets) releases the thumbnail with it.
+
+Generating a thumbnail never fails an asset: if the frame cannot be decoded,
+the asset comes back without the three `thumbnail*` fields. Always narrow
+`thumbnailUri` before using it.
+
 ## Camera
 
 ```ts
@@ -250,6 +282,33 @@ deletes the file the camera app is writing into, and the capture then resolves
 can delete a just-written asset before its `uri` reaches you. Call it after the
 `launchImageLibrary` / `launchCamera` promise has settled.
 
+### Releasing individual assets
+
+`cleanTempFiles()` is all-or-nothing. When you keep some assets and are done
+with others — the user deselected one, an upload finished, a preview was
+dismissed — release just those:
+
+```ts
+import { releaseAssets } from '@eugeniuszx/react-native-media-picker';
+
+await releaseAssets(result.assets ?? []); // whole batch
+await releaseAssets(asset); // one asset
+await releaseAssets(asset.uri); // one uri
+```
+
+It accepts an asset, a `uri` string, or an array mixing both. Passing an asset
+also releases its `thumbnailUri`, which a bare `uri` string would leave behind.
+Duplicates and empty entries are dropped, and an empty list never reaches the
+native module.
+
+Only files inside the library's own `rn-media-picker` directory can be deleted:
+a `uri` pointing anywhere else — or one this library did not hand out — is
+ignored rather than acted on. Non-`file://` uris are ignored too.
+
+Like `cleanTempFiles`, it never rejects, and the promise resolves once the
+deletion is scheduled rather than once the files are gone. The same warning
+applies: do not call it while a pick is in flight.
+
 Upgrading from 0.2.x: temp files written by earlier versions went straight into
 the cache/temp directory rather than the `rn-media-picker` subdirectory, so
 neither `cleanTempFiles` nor the 24-hour sweep touches them. They are left to the
@@ -259,6 +318,68 @@ OS to reclaim.
 
 Gallery picking needs **no** permissions. Camera capture may require permissions — see
 [Camera permissions](#camera-permissions) above.
+
+## Expo
+
+The library is not available in Expo Go (it ships native code), but it works in
+any project using `expo prebuild` / a development build. A config plugin is
+included so you do not have to edit `Info.plist` by hand:
+
+```json
+{
+  "expo": {
+    "plugins": [
+      [
+        "@eugeniuszx/react-native-media-picker",
+        {
+          "cameraPermission": "Let $(PRODUCT_NAME) take photos for your profile."
+        }
+      ]
+    ]
+  }
+}
+```
+
+| Prop | Type | Default | Effect |
+|---|---|---|---|
+| `cameraPermission` | `string \| false` | a generic sentence | Text for `NSCameraUsageDescription`. `false` leaves `Info.plist` alone — use it if you only pick from the gallery, or set the key yourself |
+| `enableAndroidCameraPermission` | `boolean` | `false` | Adds `android.permission.CAMERA` to the manifest |
+
+Leave `enableAndroidCameraPermission` off unless you need the permission for
+something else: declaring `CAMERA` is what makes this library ask for it at
+runtime, and without it the system camera app needs no permission at all — see
+[Camera permissions](#camera-permissions).
+
+The plugin adds no runtime dependency; it resolves `expo/config-plugins` from
+your app, and non-Expo projects never load it.
+
+## Testing
+
+Jest cannot load a TurboModule, so mock the package. A ready-made mock ships
+with it:
+
+```ts
+jest.mock('@eugeniuszx/react-native-media-picker', () =>
+  require('@eugeniuszx/react-native-media-picker/jest/mock')
+);
+```
+
+Every entry point (`launchImageLibrary`, `launchCamera`, `cleanTempFiles`,
+`releaseAssets`) becomes a `jest.fn()` resolving `{ didCancel: true }`, so
+stage a result per test:
+
+```ts
+import { launchImageLibrary } from '@eugeniuszx/react-native-media-picker';
+
+(launchImageLibrary as jest.Mock).mockResolvedValueOnce({
+  didCancel: false,
+  assets: [{ uri: 'file:///tmp/a.jpg', type: 'image/jpeg' }],
+});
+```
+
+The mock covers the entry points only — the pure option helpers
+(`normalizeLibraryOptions`, `collectReleasableUris`) are not re-exported,
+since they need no mocking.
 
 ## Migrating from 0.2.x
 

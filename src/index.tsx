@@ -20,6 +20,7 @@ export interface LibraryOptions {
   includeBase64?: boolean;
   format?: OutputFormat;
   mediaType?: MediaType;
+  includeThumbnail?: boolean;
 }
 
 export type CameraType = 'back' | 'front';
@@ -60,6 +61,7 @@ export const normalizeLibraryOptions = (
   includeBase64: options.includeBase64 ?? false,
   format: normalizeFormat(options.format),
   mediaType: normalizeMediaType(options.mediaType),
+  includeThumbnail: options.includeThumbnail ?? false,
 });
 
 export const launchImageLibrary = (
@@ -92,3 +94,37 @@ export const launchCamera = (
 
 export const cleanTempFiles = (): Promise<void> =>
   NativeMediaPicker.cleanTempFiles();
+
+export type ReleasableAsset = Pick<Asset, 'uri' | 'thumbnailUri'>;
+
+const isReleasableList = (
+  value: ReleasableAsset | string | ReadonlyArray<ReleasableAsset | string>
+): value is ReadonlyArray<ReleasableAsset | string> => Array.isArray(value);
+
+export const collectReleasableUris = (
+  target: ReleasableAsset | string | ReadonlyArray<ReleasableAsset | string>
+): string[] => {
+  const items = isReleasableList(target) ? target : [target];
+  const uris = new Set<string>();
+
+  for (const item of items) {
+    if (typeof item === 'string') {
+      if (item) uris.add(item);
+      continue;
+    }
+    if (!item) continue;
+    if (item.uri) uris.add(item.uri);
+    if (item.thumbnailUri) uris.add(item.thumbnailUri);
+  }
+
+  return [...uris];
+};
+
+export const releaseAssets = (
+  target: ReleasableAsset | string | ReadonlyArray<ReleasableAsset | string>
+): Promise<void> => {
+  const uris = collectReleasableUris(target);
+  return uris.length
+    ? NativeMediaPicker.releaseAssets(uris)
+    : Promise.resolve();
+};

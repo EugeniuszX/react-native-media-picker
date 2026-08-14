@@ -10,6 +10,9 @@ export type Asset = {
   height?: number;
   duration?: number;
   base64?: string;
+  thumbnailUri?: string;
+  thumbnailWidth?: number;
+  thumbnailHeight?: number;
 };
 
 export type ErrorCode = 'permission' | 'camera_unavailable' | 'others';
@@ -29,6 +32,7 @@ export type NativeLibraryOptions = {
   includeBase64: boolean;
   format: string;
   mediaType: string;
+  includeThumbnail: boolean;
 };
 
 export type NativeCameraOptions = {
@@ -44,6 +48,7 @@ export interface Spec extends TurboModule {
   launchImageLibrary(options: NativeLibraryOptions): Promise<PickerResponse>;
   launchCamera(options: NativeCameraOptions): Promise<PickerResponse>;
   cleanTempFiles(): Promise<void>;
+  releaseAssets(uris: Array<string>): Promise<void>;
 }
 
 export default TurboModuleRegistry.getEnforcing<Spec>('ReactNativeMediaPicker');
