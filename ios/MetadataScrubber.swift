@@ -26,14 +26,31 @@ enum MetadataScrubber {
       tiff[kCGImagePropertyTIFFOrientation] = orientation
     }
 
-    let overrides: [CFString: Any] = [
+    var overrides: [CFString: Any] = [
       kCGImagePropertyExifDictionary: kCFNull,
       kCGImagePropertyGPSDictionary: kCFNull,
       kCGImagePropertyIPTCDictionary: kCFNull,
       kCGImagePropertyExifAuxDictionary: kCFNull,
       kCGImagePropertyMakerAppleDictionary: kCFNull,
+      // PNG `tEXt`/`iTXt` chunks carry Author, Comment and Software, which the EXIF and GPS
+      // dictionaries above do not cover.
+      kCGImagePropertyPNGDictionary: kCFNull,
       kCGImagePropertyTIFFDictionary: tiff.isEmpty ? kCFNull : tiff,
     ]
+
+    // XMP is a second metadata channel, reached through `CGImageSourceCopyMetadataAtIndex` rather
+    // than the `kCGImageProperty…` dictionaries above, and it can hold `exif:GPSLatitude`,
+    // `tiff:Make` and `tiff:Model` — the very data this function promises to remove. Anything
+    // written by Lightroom or Google Photos is the realistic case.
+    //
+    // Caveat worth knowing: `CGImageDestination.h` documents these two keys under
+    // "Keys which may be used in the 'options' dictionary of CGImageDestinationCopyImageSource",
+    // not under the block for `AddImageFromSource`, so their effect here is not guaranteed by the
+    // header. They are passed because they can only subtract metadata, never add it, and the
+    // alternative — an empty `kCGImageDestinationMetadata` — is documented to replace *all* EXIF
+    // and TIFF tags, which would take the orientation above with it. See task-7-report.md.
+    overrides[kCGImageMetadataShouldExcludeXMP] = kCFBooleanTrue
+    overrides[kCGImageMetadataShouldExcludeGPS] = kCFBooleanTrue
 
     CGImageDestinationAddImageFromSource(destination, source, 0, overrides as CFDictionary)
     guard CGImageDestinationFinalize(destination) else { return nil }

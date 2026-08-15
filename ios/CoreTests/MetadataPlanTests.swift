@@ -64,6 +64,27 @@ final class MetadataPlanTests: XCTestCase {
     )
   }
 
+  func testAnimatedSourceIsPreserved() {
+    XCTAssertTrue(MetadataPlan.preservesSource(format: .webp, preserveAnimation: true))
+  }
+
+  func testStaticGifIsPreserved() {
+    XCTAssertTrue(MetadataPlan.preservesSource(format: .gif, preserveAnimation: false))
+  }
+
+  func testAnimatedGifIsPreserved() {
+    XCTAssertTrue(MetadataPlan.preservesSource(format: .gif, preserveAnimation: true))
+  }
+
+  func testStaticNonGifSourcesAreNotPreserved() {
+    for format in [ImageFormat.jpeg, .png, .heic, .webp] {
+      XCTAssertFalse(
+        MetadataPlan.preservesSource(format: format, preserveAnimation: false),
+        "\(format)"
+      )
+    }
+  }
+
   func testCanScrubCoversTheContainersImageIOCanRewrite() {
     XCTAssertTrue(MetadataPlan.canScrub(.jpeg))
     XCTAssertTrue(MetadataPlan.canScrub(.png))

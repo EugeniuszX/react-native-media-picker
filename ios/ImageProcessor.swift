@@ -45,7 +45,10 @@ struct ImageProcessor {
     let action = MetadataPlan.resolve(
       stripMetadata: stripMetadata,
       willTransform: willTransform,
-      preserveSource: output.preserveAnimation || format == .gif,
+      preserveSource: MetadataPlan.preservesSource(
+        format: format,
+        preserveAnimation: output.preserveAnimation
+      ),
       canScrub: MetadataPlan.canScrub(format)
     )
 

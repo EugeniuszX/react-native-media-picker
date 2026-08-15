@@ -26,6 +26,14 @@ enum MetadataPlan {
     return canScrub ? .scrub : .forceReencode
   }
 
+  /// Whether a source must come back byte-for-byte, which is what `resolve`'s `preserveSource`
+  /// expects. Two independent reasons: an animated source would lose its frames to a re-encode,
+  /// and a GIF re-encodes to JPEG — flattening any transparency onto black to remove metadata
+  /// a GIF never carries in the first place. So a GIF is preserved whether animated or not.
+  static func preservesSource(format: ImageFormat, preserveAnimation: Bool) -> Bool {
+    preserveAnimation || format == .gif
+  }
+
   /// The containers this library rewrites in place. WebP is excluded because iOS ships no WebP
   /// encoder at all; GIF is excluded by policy rather than capability — `CGImageDestination` can
   /// write one, but a rewrite risks the animation, so GIFs are passed through untouched.
