@@ -22,18 +22,24 @@ internal object MetadataPlan {
     !stripMetadata -> MetadataAction.SKIP
     // A re-encode decodes to a bitmap and writes fresh bytes, so no metadata survives it.
     willTransform -> MetadataAction.SKIP
-    // Some sources must come back byte-for-byte: an animated one would lose its frames to a
-    // re-encode, and a GIF would be flattened into a JPEG to remove metadata it never had.
-    preserveSource -> MetadataAction.SKIP
+    // Checked before `preserveSource`, because a scrub is a container rewrite and not a
+    // re-encode: no pixel is decoded, so an animated WebP keeps every frame while losing the
+    // EXIF chunk its camera wrote. Only the re-encode is destructive.
     canScrub -> MetadataAction.SCRUB
+    // Left with the choice between re-encoding and doing nothing, and this source cannot be
+    // re-encoded: an animated one would lose its frames, and a GIF would be flattened into a
+    // JPEG to remove metadata it never had.
+    preserveSource -> MetadataAction.SKIP
     else -> MetadataAction.FORCE_REENCODE
   }
 
   /**
-   * Whether a source must come back byte-for-byte, which is what [resolve]'s `preserveSource`
-   * expects. Two independent reasons: an animated source would lose its frames to a re-encode,
-   * and a GIF re-encodes to JPEG — flattening any transparency onto black to remove metadata a
-   * GIF never carries in the first place. So a GIF is preserved whether animated or not.
+   * Whether a source must not be re-encoded, which is what [resolve]'s `preserveSource` expects.
+   * Two independent reasons: an animated source would lose its frames, and a GIF re-encodes to
+   * JPEG — flattening any transparency onto black to remove metadata a GIF never carries in the
+   * first place. So a GIF is preserved whether animated or not.
+   *
+   * This does not stop a scrub, which rewrites the container without touching the pixels.
    */
   fun preservesSource(mime: String, preserveAnimation: Boolean): Boolean =
     preserveAnimation || mime == "image/gif"

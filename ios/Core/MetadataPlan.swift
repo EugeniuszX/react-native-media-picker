@@ -20,16 +20,25 @@ enum MetadataPlan {
     guard stripMetadata else { return .skip }
     // A re-encode decodes to a bitmap and writes fresh bytes, so no metadata survives it.
     if willTransform { return .skip }
-    // Some sources must come back byte-for-byte: an animated one would lose its frames to a
-    // re-encode, and a GIF would be flattened into a JPEG to remove metadata it never had.
+    // Checked before `preserveSource`, because a scrub is a container rewrite and not a
+    // re-encode: no pixel is decoded, so an animated source would keep every frame. Only the
+    // re-encode is destructive. (No format reaches this line with both flags set on iOS —
+    // `canScrub` is false for the two animatable formats — but the ordering is shared with
+    // Android, where WebP is scrubbable, and the two must not diverge.)
+    if canScrub { return .scrub }
+    // Left with the choice between re-encoding and doing nothing, and this source cannot be
+    // re-encoded: an animated one would lose its frames, and a GIF would be flattened into a
+    // JPEG to remove metadata it never had.
     if preserveSource { return .skip }
-    return canScrub ? .scrub : .forceReencode
+    return .forceReencode
   }
 
-  /// Whether a source must come back byte-for-byte, which is what `resolve`'s `preserveSource`
-  /// expects. Two independent reasons: an animated source would lose its frames to a re-encode,
-  /// and a GIF re-encodes to JPEG — flattening any transparency onto black to remove metadata
-  /// a GIF never carries in the first place. So a GIF is preserved whether animated or not.
+  /// Whether a source must not be re-encoded, which is what `resolve`'s `preserveSource`
+  /// expects. Two independent reasons: an animated source would lose its frames, and a GIF
+  /// re-encodes to JPEG — flattening any transparency onto black to remove metadata a GIF never
+  /// carries in the first place. So a GIF is preserved whether animated or not.
+  ///
+  /// This does not stop a scrub, which rewrites the container without touching the pixels.
   static func preservesSource(format: ImageFormat, preserveAnimation: Bool) -> Bool {
     preserveAnimation || format == .gif
   }

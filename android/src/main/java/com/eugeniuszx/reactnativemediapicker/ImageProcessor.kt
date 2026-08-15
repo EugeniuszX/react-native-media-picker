@@ -44,10 +44,11 @@ internal class ImageProcessor(
     )
 
     val willTransform = plan.needsTransform || output.forceReencode
+    val preserveSource = MetadataPlan.preservesSource(srcMime, output.preserveAnimation)
     val action = MetadataPlan.resolve(
       stripMetadata = stripMetadata,
       willTransform = willTransform,
-      preserveSource = MetadataPlan.preservesSource(srcMime, output.preserveAnimation),
+      preserveSource = preserveSource,
       canScrub = MetadataPlan.canScrub(srcMime),
     )
 
@@ -57,13 +58,31 @@ internal class ImageProcessor(
       )
     }
 
-    // A failed scrub falls through to a re-encode, so a strip request is never silently ignored.
-    return passthrough(
-      uri, srcMime, plan, includeBase64, suggestedName,
-      scrub = action == MetadataAction.SCRUB, exif = exif,
-    ) ?: transform(
-      uri, output.target, plan, orientation, quality, includeBase64, suggestedName, exif,
-    )
+    if (action == MetadataAction.SCRUB) {
+      val outFile = copyToTemp(uri, srcMime)
+      // A source carrying an XMP packet is declined before the scrub is even attempted:
+      // ExifInterface cannot remove XMP, and a packet can carry `exif:GPSLatitude`, `tiff:Make`
+      // and `tiff:Model` of its own — so a scrubbed file would still leak exactly what the caller
+      // asked to remove. The re-encode below is the deliberate price of a guarantee that holds
+      // for every input rather than one that quietly leaks for files from an XMP-writing
+      // pipeline (Lightroom, Google Photos).
+      if (!XMPPacket.isPresent(outFile) && MetadataScrubber.scrub(outFile)) {
+        return payloadFrom(outFile, srcMime, plan, includeBase64, suggestedName, exif)
+      }
+      outFile.delete()
+      // The scrub could not be completed, so a re-encode is the fallback that keeps the strip
+      // honest — unless this is a source we are not allowed to re-encode. The only route there
+      // is an animated WebP carrying an XMP packet: a re-encode would flatten it to a single
+      // frame, so the frames win and the file comes back untouched. That matches iOS, which
+      // cannot rewrite a WebP at all and skips every one of them.
+      if (!preserveSource) {
+        return transform(
+          uri, output.target, plan, orientation, quality, includeBase64, suggestedName, exif,
+        )
+      }
+    }
+
+    return payloadFrom(copyToTemp(uri, srcMime), srcMime, plan, includeBase64, suggestedName, exif)
   }
 
   private fun readBounds(uri: Uri): Pair<Int, Int> {
@@ -103,41 +122,34 @@ internal class ImageProcessor(
     false
   }
 
-  private fun passthrough(
-    uri: Uri,
-    mime: String,
-    plan: DecodePlan,
-    includeBase64: Boolean,
-    suggestedName: String?,
-    scrub: Boolean,
-    exif: ExifPayload?,
-  ): AssetPayload? {
+  /** Copies the source bytes into a temp file untouched. */
+  private fun copyToTemp(uri: Uri, mime: String): File {
     val outFile = tempFiles.createFile(MediaFormat.extensionForMime(mime))
     resolver.openInputStream(uri).use { input ->
       input ?: throw IllegalStateException("Failed to open image stream")
       FileOutputStream(outFile).use { output -> input.copyTo(output) }
     }
+    return outFile
+  }
 
-    // A source carrying an XMP packet is declined before the scrub is even attempted:
-    // ExifInterface cannot remove XMP, and a packet can carry `exif:GPSLatitude`, `tiff:Make` and
-    // `tiff:Model` of its own — so a scrubbed file would still leak exactly what the caller asked
-    // to remove. Returning null sends it down the re-encode path instead, which produces a
-    // metadata-free file by construction. The re-encode is the deliberate price of a guarantee
-    // that holds for every input rather than one that quietly leaks for files from an
-    // XMP-writing pipeline (Lightroom, Google Photos).
-    if (scrub && (XMPPacket.isPresent(outFile) || !MetadataScrubber.scrub(outFile))) {
-      outFile.delete()
-      return null
-    }
-
+  /**
+   * Describes a file that was copied rather than re-encoded. The base64 is read back from the
+   * file so it reflects a scrub, rather than the bytes that went in.
+   */
+  private fun payloadFrom(
+    file: File,
+    mime: String,
+    plan: DecodePlan,
+    includeBase64: Boolean,
+    suggestedName: String?,
+    exif: ExifPayload?,
+  ): AssetPayload {
     val base64 = if (includeBase64) {
-      Base64.encodeToString(outFile.readBytes(), Base64.NO_WRAP)
+      Base64.encodeToString(file.readBytes(), Base64.NO_WRAP)
     } else {
       null
     }
-    return payload(
-      outFile, mime, plan.displayWidth, plan.displayHeight, base64, suggestedName, exif,
-    )
+    return payload(file, mime, plan.displayWidth, plan.displayHeight, base64, suggestedName, exif)
   }
 
   private fun transform(

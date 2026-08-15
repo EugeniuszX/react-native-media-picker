@@ -35,17 +35,50 @@ final class MetadataPlanTests: XCTestCase {
     )
   }
 
-  func testAnimatedSourcesAreNeverTouched() {
+  func testPreserveSourceGuardsOnlyTheReencode() {
+    // A scrub rewrites the container without decoding a pixel, so a preserved source is still
+    // scrubbed when its container can be rewritten — only the re-encode is held back. No iOS
+    // format reaches this combination (see testAnimatedWebPIsSkippedOnIOS), but the decision
+    // core is shared with Android, where WebP is scrubbable.
     XCTAssertEqual(
       MetadataPlan.resolve(
         stripMetadata: true, willTransform: false, preserveSource: true, canScrub: true),
-      .skip
+      .scrub
     )
     XCTAssertEqual(
       MetadataPlan.resolve(
         stripMetadata: true, willTransform: false, preserveSource: true, canScrub: false),
       .skip
     )
+  }
+
+  /// The deliberate platform divergence, asserted rather than incidental: Android scrubs an
+  /// animated WebP, iOS cannot rewrite a WebP at all and so leaves it alone.
+  func testAnimatedWebPIsSkippedOnIOS() {
+    XCTAssertEqual(
+      MetadataPlan.resolve(
+        stripMetadata: true,
+        willTransform: false,
+        preserveSource: MetadataPlan.preservesSource(format: .webp, preserveAnimation: true),
+        canScrub: MetadataPlan.canScrub(.webp)
+      ),
+      .skip
+    )
+  }
+
+  func testGifIsLeftAloneWhetherAnimatedOrNot() {
+    for animated in [true, false] {
+      XCTAssertEqual(
+        MetadataPlan.resolve(
+          stripMetadata: true,
+          willTransform: false,
+          preserveSource: MetadataPlan.preservesSource(format: .gif, preserveAnimation: animated),
+          canScrub: MetadataPlan.canScrub(.gif)
+        ),
+        .skip,
+        "animated \(animated)"
+      )
+    }
   }
 
   func testScrubbableStillImageIsScrubbed() {

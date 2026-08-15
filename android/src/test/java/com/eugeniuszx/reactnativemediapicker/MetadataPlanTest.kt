@@ -25,9 +25,38 @@ class MetadataPlanTest {
     assertEquals(MetadataAction.SKIP, MetadataPlan.resolve(true, true, false, false))
   }
 
-  @Test fun preservedSourcesAreNeverTouched() {
-    assertEquals(MetadataAction.SKIP, MetadataPlan.resolve(true, false, true, true))
+  @Test fun preserveSourceGuardsOnlyTheReencode() {
+    // A scrub rewrites the container without decoding a pixel, so a preserved source is still
+    // scrubbed when its container can be rewritten — only the re-encode is held back.
+    assertEquals(MetadataAction.SCRUB, MetadataPlan.resolve(true, false, true, true))
     assertEquals(MetadataAction.SKIP, MetadataPlan.resolve(true, false, true, false))
+  }
+
+  @Test fun animatedWebpIsScrubbedRatherThanLeftWithItsGps() {
+    assertEquals(
+      MetadataAction.SCRUB,
+      MetadataPlan.resolve(
+        stripMetadata = true,
+        willTransform = false,
+        preserveSource = MetadataPlan.preservesSource("image/webp", preserveAnimation = true),
+        canScrub = MetadataPlan.canScrub("image/webp"),
+      ),
+    )
+  }
+
+  @Test fun gifIsLeftAloneWhetherAnimatedOrNot() {
+    for (animated in listOf(true, false)) {
+      assertEquals(
+        "animated $animated",
+        MetadataAction.SKIP,
+        MetadataPlan.resolve(
+          stripMetadata = true,
+          willTransform = false,
+          preserveSource = MetadataPlan.preservesSource("image/gif", preserveAnimation = animated),
+          canScrub = MetadataPlan.canScrub("image/gif"),
+        ),
+      )
+    }
   }
 
   @Test fun scrubbableStillImageIsScrubbed() {
