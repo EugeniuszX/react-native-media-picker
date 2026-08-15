@@ -5,8 +5,9 @@
 [![license](https://img.shields.io/npm/l/@eugeniuszx/react-native-media-picker.svg)](./LICENSE)
 
 Cross-platform media picker for React Native (New Architecture). Picks photos and
-videos from the gallery, and captures photos with the camera. Gallery access
-requires **no runtime permissions** on iOS (PHPicker) or Android (Photo Picker).
+videos from the gallery, and captures photos or records video with the camera.
+Gallery access requires **no runtime permissions** on iOS (PHPicker) or Android
+(Photo Picker).
 
 📦 **npm:** https://www.npmjs.com/package/@eugeniuszx/react-native-media-picker
 
@@ -33,8 +34,9 @@ const result = await launchImageLibrary({
   includeBase64: false,
 });
 
-if (!result.didCancel && result.assets) {
-  console.log(result.assets[0].uri);
+if (!result.didCancel && !result.errorCode) {
+  // `assets` is `Asset[]` here, not `Asset[] | undefined`.
+  console.log(result.assets[0]?.uri);
 }
 ```
 
@@ -50,6 +52,8 @@ if (!result.didCancel && result.assets) {
 | `format` | `'original' \| 'jpeg' \| 'png'` | `'original'` | Guarantee the output file type; `'original'` preserves the source format (see below); ignored for video assets |
 | `includeBase64` | `boolean` | `false` | adds `base64` to each asset; ignored for video assets |
 | `includeThumbnail` | `boolean` | `false` | adds `thumbnailUri` to each **video** asset (see [Video thumbnails](#video-thumbnails)); ignored for photos |
+| `includeExif` | `boolean` | `false` | adds `exif` to each **photo** asset, read from the source (see [Metadata](#metadata)); ignored for video assets |
+| `stripMetadata` | `boolean` | `false` | removes EXIF/GPS from each **photo** written (see [Metadata](#metadata)); ignored for video assets |
 
 Videos can be picked with `mediaType: 'video'` (or alongside photos with
 `'mixed'`) — see [Video assets](#video-assets).
@@ -70,10 +74,11 @@ Each picked item resolves to: `uri` (a `file://` path to a temp file), `type`
 [Format handling](#format-handling) and [Video assets](#video-assets) for how
 it is derived), `fileName` (extension matches `type`), `fileSize`, `width`,
 `height`, `duration` (seconds, video assets only — absent for photos),
-`base64` (only when `includeBase64` is true, photos only), and
+`base64` (only when `includeBase64` is true, photos only),
 `thumbnailUri`/`thumbnailWidth`/`thumbnailHeight` (only when
 `includeThumbnail` is true, video assets only — see
-[Video thumbnails](#video-thumbnails)).
+[Video thumbnails](#video-thumbnails)), and `exif` (only when `includeExif` is
+true, photos only — see [Metadata](#metadata)).
 
 `uri` and `type` are the only fields declared non-optional. `fileName`,
 `fileSize`, `width` and `height` are typed `?:`, so TypeScript makes you narrow
@@ -198,14 +203,15 @@ const result = await launchImageLibrary({
   includeThumbnail: true,
 });
 
-// <Image source={{ uri: result.assets?.[0].thumbnailUri }} />
+// <Image source={{ uri: result.assets?.[0]?.thumbnailUri }} />
 ```
 
 The thumbnail is a **JPEG** taken from the first renderable frame, fitted
 inside 512×512 (never scaled up), with the video's rotation metadata already
 applied. Its size is not configurable — `maxWidth`/`maxHeight`/`quality`/
 `format` describe the asset, not its preview. Photo assets never get one, and
-neither do camera captures.
+neither do camera photo captures — but a video recorded with
+[`launchCamera`](#camera) does, since it is a video asset like any other.
 
 The thumbnail is a temp file in the same `rn-media-picker` directory, so it is
 covered by the 24-hour sweep and by `cleanTempFiles()`. Passing the asset to
@@ -214,6 +220,150 @@ covered by the 24-hour sweep and by `cleanTempFiles()`. Passing the asset to
 Generating a thumbnail never fails an asset: if the frame cannot be decoded,
 the asset comes back without the three `thumbnail*` fields. Always narrow
 `thumbnailUri` before using it.
+
+## Metadata
+
+Two independent options, both `false` by default and both photo-only:
+`includeExif` reads metadata **out of the source** and hands it to you,
+`stripMetadata` keeps metadata **out of the file** that is written. They do not
+interact — asking for both is the ordinary way to keep the location of a photo
+for yourself without shipping it inside the bytes you upload.
+
+### `includeExif`
+
+`includeExif: true` adds an `exif` object to every photo asset. Video assets
+never get one and the option is ignored for them.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `dateTimeOriginal` | `string` | When the shot was taken, ISO 8601 **without an offset** (`2026-08-14T15:29:03`). EXIF carries no timezone, so none is invented; a malformed or all-zero timestamp is dropped rather than half-parsed |
+| `latitude` | `number` | Signed decimal degrees — negative south of the equator |
+| `longitude` | `number` | Signed decimal degrees — negative west of Greenwich |
+| `altitude` | `number` | Metres, negative below sea level |
+| `make` | `string` | Camera manufacturer |
+| `model` | `string` | Camera model |
+| `orientation` | `number` | The EXIF orientation value, `1`–`8` |
+| `iso` | `number` | Sensitivity, as in `400` |
+| `fNumber` | `number` | Aperture, as in `1.8` |
+| `exposureTime` | `number` | Seconds — `0.008` for 1/125 |
+| `focalLength` | `number` | Millimetres |
+
+**Every one of the eleven is optional**, and so is `exif` itself: a source with
+none of them — a screenshot, a re-saved PNG — arrives without the object at all
+rather than with an empty one. Narrow both levels.
+
+```ts
+const result = await launchImageLibrary({ selectionLimit: 1, includeExif: true });
+const takenAt = result.assets?.[0]?.exif?.dateTimeOriginal;
+```
+
+`exif` is read from the **source**, not from the file that is written. So it
+still arrives when `stripMetadata` removed those values from the output, and
+when a resize dropped them — the read happens before either.
+
+`exif.orientation` describes the source too. After a resize the rotation is
+baked into the pixels and the written file is upright, while the field still
+reports the value the original carried. `width`/`height` are the authority on
+the file you were handed; read `orientation` as a fact about where the photo
+came from, not as an instruction for rendering it.
+
+For a **camera capture** the values come from the metadata dictionary the system
+picker hands over rather than from a file, since the capture is re-encoded from
+raw pixels and the written file has no EXIF of its own.
+
+### `stripMetadata`
+
+`stripMetadata: true` guarantees the photo written to `uri` carries no EXIF and
+no GPS. There are two ways to get there, and which one an asset takes is worth
+knowing, because only one of them is free:
+
+- **Rewriting the container in place.** The already-compressed pixel data is
+  copied across untouched, so nothing is decoded and no quality is lost. The
+  file gets slightly smaller and everything else about it stays put.
+- **Re-encoding.** Used where the container cannot be rewritten. The image is
+  decoded and written afresh, so `fileSize` changes, `type` and `fileName` can
+  change with it, and the pixels are no longer the source's.
+
+`orientation` always survives either route. Dropping it would render a
+quarter-turned photo sideways, and the reported `width`/`height` already assume
+it is there.
+
+| Source | iOS | Android |
+|---|---|---|
+| JPEG | rewritten in place | rewritten in place |
+| PNG | rewritten in place | rewritten in place |
+| HEIC | rewritten in place, stays `image/heic` | **re-encoded to `image/jpeg`** |
+| WebP, static | **re-encoded to `image/jpeg`** (no WebP encoder on iOS) | rewritten in place |
+| WebP, animated | **passthrough — not honoured** | rewritten in place, frames intact |
+| GIF (animated or not) | **no-op** | **no-op** |
+
+Beyond the table, the cases that surprise people:
+
+**GIF is a no-op, animated or not.** A GIF has no EXIF or GPS container, so
+there is nothing to remove. Re-encoding one anyway would flatten a static GIF
+into a JPEG and composite its transparency onto black, to strip metadata it
+never carried. Both platforms leave GIFs exactly as they arrived.
+
+**An animated WebP on iOS is a genuine passthrough.** iOS ships no WebP encoder
+at all, so the container cannot be rewritten, and a re-encode would leave one
+frame of an animation. The frames win: this is the one input where
+`stripMetadata: true` returns a file that may still carry metadata. A **static**
+WebP takes the re-encode instead and does honour the option, coming back as
+`image/jpeg`. Android rewrites both in place and honours the option for each.
+
+**A HEIC changes container on Android.** `ExifInterface` can read HEIC but not
+write it, so a strip means a re-encode to JPEG: `type` becomes `image/jpeg`,
+`fileName`'s extension follows, and `fileSize` moves. On iOS the same photo is
+scrubbed in place and stays `image/heic`. This mirrors what a resize already
+does to a HEIC on Android — see [Format handling](#format-handling).
+
+**A source carrying an XMP packet is re-encoded rather than rewritten.** XMP is
+a second, parallel copy of the metadata — it can hold `exif:GPSLatitude` and
+`tiff:Model` of its own — and neither platform's in-place writer can remove it:
+ImageIO's XMP exclusion keys are documented for a different call than the one
+iOS uses to copy the image across, and Android's `saveAttributes` replaces only
+the EXIF segment and copies every other one verbatim. Rather than rest the
+guarantee on undocumented behaviour, both platforms decline the rewrite and
+re-encode. Photos that went through Lightroom, Google Photos or a similar
+pipeline commonly carry a packet. The consequence is worth stating plainly: **a JPEG
+asked for with `format: 'original'` and no resize comes back materially larger**
+than the untouched passthrough the caller expected. Quality is not reduced —
+`quality` defaults to `1` — which is exactly why the file grows.
+
+**Two more channels take the re-encode on Android**, because `saveAttributes`
+copies them across untouched: an IPTC block (JPEG `APP13`, written by Photoshop
+and the newsroom tooling that follows it — creator, city, contact, copyright)
+and PNG text chunks (`tEXt`/`zTXt`/`iTXt` — Author, Comment, Software). A source
+carrying either is re-encoded and comes back larger, same as an XMP one. On iOS
+those two channels are removed in place by the writer itself, so a JPEG with
+IPTC or a PNG with text chunks is still scrubbed losslessly there.
+
+The one place that leaves an asset with nowhere to go is an **animated WebP on
+Android that also carries residue**: it cannot be scrubbed cleanly and it cannot
+be re-encoded without losing its frames, so the frames win and the file comes
+back as it arrived — the same unhonoured outcome iOS has for every animated
+WebP.
+
+**JPEG `COM` comment segments survive a scrub on Android.** A `COM` segment has
+no identifier to detect and no defined semantics; in practice it holds encoder
+signatures (`"Created with GIMP"` and the like) rather than anything about the
+photographer. iOS's container rewrite does not carry them across, so the two
+platforms differ here. It is a real gap in "carries no metadata" if you read
+that phrase at its widest — EXIF and GPS are what is guaranteed.
+
+**A scrub that fails falls through to a re-encode** on both platforms, rather
+than returning a half-stripped file. So a strip you asked for is never quietly
+skipped, and the animated WebP above is the single exception to that.
+
+### Without `stripMetadata`
+
+The default is unchanged from earlier versions and is worth stating next to the
+above, because it is the case most photos hit: a photo returned **untouched**
+keeps every byte of EXIF and GPS it arrived with, and a photo that was
+**resized** loses all of it, since a re-encode writes fresh bytes and this
+version does not copy metadata across one. So the metadata a caller ends up
+shipping today depends on whether a resize happened. `stripMetadata: true` is
+the way to stop it depending on that.
 
 ## Camera
 
@@ -234,20 +384,66 @@ const result = await launchCamera({
 | Option | Type | Default | Notes |
 |---|---|---|---|
 | `cameraType` | `'back' \| 'front'` | `'back'` | Honored on iOS; **best-effort on Android** (the system camera app may ignore it) |
+| `mediaType` | `'photo' \| 'video'` | `'photo'` | `'video'` records a movie instead of capturing a still (see [Recording video](#recording-video)) |
 | `maxWidth` | `number` | `0` | `0` = no resize |
 | `maxHeight` | `number` | `0` | `0` = no resize |
 | `quality` | `number` | `1` | JPEG quality 0..1. Applies whenever the capture is re-encoded — always on iOS; on Android only when a resize is needed; ignored when `format: 'png'` (PNG is lossless) |
 | `format` | `'original' \| 'jpeg' \| 'png'` | `'original'` | Output type of the capture; `'original'` = JPEG, as before |
 | `includeBase64` | `boolean` | `false` | adds `base64` to the captured asset |
+| `includeExif` | `boolean` | `false` | photos only (see [Metadata](#metadata)) |
+| `stripMetadata` | `boolean` | `false` | photos only; **a no-op on iOS**, where a capture is always re-encoded and therefore already carries no metadata |
+| `maxDuration` | `number` | `0` | Recording limit in seconds. `0` leaves the **platform's own** limit, which is 10 minutes on iOS and whatever the camera app defaults to on Android — not "unlimited". **Best-effort on Android** |
+| `videoQuality` | `'low' \| 'medium' \| 'high'` | `'high'` | Honored on iOS; **best-effort on Android** (`EXTRA_VIDEO_QUALITY` carries only low/high, so `'medium'` is sent as high, and most camera apps ignore it anyway) |
+| `includeThumbnail` | `boolean` | `false` | adds `thumbnailUri` to a recorded **video** (see [Video thumbnails](#video-thumbnails)); ignored for photos |
 
-`launchCamera` captures still photos; there is no `mediaType` option and no
-video recording. Videos come from the library picker — see
-[Video assets](#video-assets).
+### Recording video
+
+`mediaType: 'video'` opens the same system camera in movie mode and returns a
+recorded movie instead of a still:
+
+```ts
+const result = await launchCamera({
+  mediaType: 'video',
+  maxDuration: 30,
+  videoQuality: 'medium',
+  includeThumbnail: true,
+});
+```
+
+The result is the same shape as a video picked from the library — `duration`,
+displayed `width`/`height`, `fileSize`, and `thumbnailUri` when you ask for it —
+so [Video assets](#video-assets) describes it in full. The recording is never
+transcoded, and `fileName` is the generated `media_picker_<uuid>.<ext>`, since a
+fresh recording has no name in the gallery. `type` is `video/quicktime` on iOS
+and `video/mp4` on Android — though a camera app that ignores the output file
+and hands back a content uri of its own can report a different video mime, which
+is passed through exactly as a picked one would be.
+
+The photo options do not apply to a recording and are ignored for it:
+`maxWidth`, `maxHeight`, `quality`, `format`, `includeBase64`, `includeExif` and
+`stripMetadata`. `videoQuality` and `maxDuration` take their place, with the
+caveats in the table above — `cameraType` carries the same best-effort caveat on
+Android it always has.
+
+`maxDuration: 0` does not mean "record until the user stops". It means the
+library sets no limit of its own and leaves the platform's: a hard 10 minutes on
+iOS, and on Android whatever the installed camera app decides.
 
 ### Camera permissions
 
 - **iOS:** add `NSCameraUsageDescription` to your app's `Info.plist`. iOS shows the permission prompt automatically; the app crashes at launch of the camera if the key is missing. If the user denies access, `launchCamera` resolves `{ didCancel: false, errorCode: 'permission' }`.
 - **Android:** if your app declares `android.permission.CAMERA` in its manifest, this library requests it at runtime before opening the camera (a denial resolves `{ didCancel: false, errorCode: 'permission' }`). If your app does **not** declare `CAMERA`, the system camera app is launched without any runtime permission.
+
+> **Recording video on iOS also needs `NSMicrophoneUsageDescription`.** The
+> system camera controller starts audio capture as soon as it opens in movie
+> mode, and iOS terminates the process when the key is missing — exactly as it
+> does without `NSCameraUsageDescription`, and before any code of yours runs.
+> Add both keys if you use `mediaType: 'video'`, or let the
+> [config plugin](#expo) do it.
+
+Android needs no equivalent. `ACTION_VIDEO_CAPTURE` hands the recording to a
+separate camera app, which holds its own microphone permission; this library
+never records audio in your process and never asks for `RECORD_AUDIO`.
 
 `launchCamera` handles all of this on its own. Reach for the two calls below when
 you want to explain yourself before the system prompt appears, or to gate a
@@ -299,23 +495,49 @@ here and surfaces as `errorCode: 'camera_unavailable'` from `launchCamera`.
 - **Success:** `{ didCancel: false, assets: Asset[] }`
 - **Cancelled:** `{ didCancel: true }`
 - **Error:** `{ didCancel: false, errorCode, errorMessage }`. `errorCode` is the
-  union `ErrorCode = 'permission' | 'camera_unavailable' | 'others'`, exported
-  from the package:
+  union
+  `ErrorCode = 'permission' | 'camera_unavailable' | 'busy' | 'others'`,
+  exported from the package:
   - `'permission'` — camera permission denied or restricted
   - `'camera_unavailable'` — the device has no camera, or (Android) no installed
     app can handle the capture intent
+  - `'busy'` — **another pick from this library is already in flight**, and
+    nothing else
   - `'others'` — everything else (no activity or view controller to present from,
-    load/decode/encode failure, a pick already in flight)
+    load/decode/encode failure)
 
-Check `didCancel`, then `errorCode`, then read `assets`.
+`PickerResponse` is a discriminated union, so those three cases narrow: check
+`didCancel`, then `errorCode`, and `assets` is `Asset[]` on what is left.
+
+```ts
+const result = await launchImageLibrary();
+
+if (result.didCancel) return;
+if (result.errorCode) {
+  console.warn(result.errorCode, result.errorMessage);
+  return;
+}
+console.log(result.assets.length); // Asset[], no `?.` needed
+```
+
+Reading `result.assets` or `result.errorMessage` on an un-narrowed value still
+compiles exactly as it did before the union.
 
 When several items are picked and only some of them fail to load, the successful
 ones are returned; in that case `errorCode` is set only if **every** item failed.
 
 Only one pick may be in flight at a time. A `launchImageLibrary` or
 `launchCamera` call made while another is still running resolves immediately with
-`errorCode: 'others'` and `errorMessage: 'Already waiting for a pick.'` — the
-running pick is left untouched.
+`errorCode: 'busy'` and `errorMessage: 'Already waiting for a pick.'` — the
+running pick is left untouched. A double-tapped button is the usual way to see
+it, and it is the code to match on when you want to ignore that quietly rather
+than surface an error.
+
+`'busy'` is narrow on purpose: it means *this library's own pick is already
+running*, not "the picker is unavailable right now". Presenting on top of a
+modal your app put up fails a separate check and still resolves `'others'`
+(`'A view controller is already being presented'` on iOS), because that is your
+UI in the way, not our pick.
 
 ## Temp files
 
@@ -406,7 +628,12 @@ included so you do not have to edit `Info.plist` by hand:
 | Prop | Type | Default | Effect |
 |---|---|---|---|
 | `cameraPermission` | `string \| false` | a generic sentence | Text for `NSCameraUsageDescription`. `false` leaves `Info.plist` alone — use it if you only pick from the gallery, or set the key yourself |
+| `microphonePermission` | `string \| false` | a generic sentence | Text for `NSMicrophoneUsageDescription`, required to record video on iOS — see [Camera permissions](#camera-permissions). `false` leaves `Info.plist` alone |
 | `enableAndroidCameraPermission` | `boolean` | `false` | Adds `android.permission.CAMERA` to the manifest |
+
+Both permission keys are written by default, since a missing
+`NSMicrophoneUsageDescription` terminates the app when the camera opens in video
+mode. Pass `false` for either one to keep it out of `Info.plist`.
 
 Leave `enableAndroidCameraPermission` off unless you need the permission for
 something else: declaring `CAMERA` is what makes this library ask for it at
@@ -444,6 +671,62 @@ import { launchImageLibrary } from '@eugeniuszx/react-native-media-picker';
 The mock covers the entry points only — the pure option helpers
 (`normalizeLibraryOptions`, `collectReleasableUris`) are not re-exported,
 since they need no mocking.
+
+## Upgrading from 1.4.x
+
+Everything new is opt-in, and no runtime behaviour changed for code that does
+not ask for it. Two things can break a build, both in the type layer.
+
+- **`PickerResponse` is now a discriminated union.** Reading `assets`,
+  `errorCode` or `errorMessage` on an un-narrowed value compiles exactly as it
+  did, so code that only *consumes* a response is unaffected; the gain is that
+  `if (didCancel) … if (errorCode) …` now narrows `assets` to `Asset[]` instead
+  of `Asset[] | undefined`.
+
+  **Code that *constructs* the type is the half that breaks** — a typed test
+  mock, a fixture in your own test utilities, a helper declared to return
+  `PickerResponse`. `{ didCancel: false }` with no `assets` and no `errorCode`
+  matches no member of the union and no longer compiles. Say which case you
+  meant:
+
+  ```ts
+  import type { Asset, PickerResponse } from '@eugeniuszx/react-native-media-picker';
+
+  const cancelled: PickerResponse = { didCancel: true };
+  const picked = (assets: Asset[]): PickerResponse => ({ didCancel: false, assets });
+  const failed: PickerResponse = {
+    didCancel: false,
+    errorCode: 'busy',
+    errorMessage: 'Already waiting for a pick.',
+  };
+  ```
+
+  The [Jest mock](#testing) that ships with the package is untyped, so
+  `mockResolvedValueOnce` on it is unaffected either way.
+
+- **`ErrorCode` gained `'busy'`**, returned where `'others'` used to be for
+  `'Already waiting for a pick.'`. The message itself is unchanged, and no other
+  code moved. An exhaustive `switch` over `ErrorCode` needs a new arm — the one
+  break the compiler will point at.
+
+  Less visibly, **code comparing `errorCode === 'others'` as a catch-all** — the
+  "something went wrong" branch, the fallback toast — stops matching the
+  double-tap case, which was probably the most common thing reaching it.
+  TypeScript says nothing, because that comparison is still valid. Handle
+  `'busy'` deliberately: see [Response & error handling](#response--error-handling)
+  for what it covers and, just as importantly, what it does not.
+
+New, all opt-in:
+
+- `mediaType: 'video'` for `launchCamera`, with `maxDuration`, `videoQuality`
+  and `includeThumbnail` — see [Recording video](#recording-video).
+- `includeExif` and `stripMetadata` for photos — see [Metadata](#metadata).
+
+One thing to add before you ship the first of those: **recording video on iOS
+requires `NSMicrophoneUsageDescription` in `Info.plist`**, or the app is
+terminated the moment the camera opens. The Expo config plugin writes the key
+for you now; a bare React Native app has to add it by hand. See
+[Camera permissions](#camera-permissions).
 
 ## Upgrading from 1.3.x
 
@@ -495,11 +778,12 @@ of failing at runtime.
 - On iOS, a `launchImageLibrary` call rejected because another pick is in flight
   now reports `errorMessage: 'Already waiting for a pick.'` instead of
   `'Already waiting for an image pick.'`. Both platforms and both entry points
-  now use the one string. `errorCode` is unchanged (`'others'`), so code matching
-  on the old message fails silently — match on `errorCode` instead.
+  now use the one string, so code matching on the old message fails silently —
+  match on `errorCode` instead, which is `'busy'` as of 1.5.0 and was `'others'`
+  before it.
 - On Android, the single-pick-in-flight window now extends through image
   processing instead of ending the moment the picker closes. A pick started while
-  the previous batch is still decoding resolves `errorCode: 'others'` with
+  the previous batch is still decoding resolves `errorCode: 'busy'` with
   `'Already waiting for a pick.'` rather than running concurrently — matching
   iOS. Chaining the next pick off the previous promise is unaffected.
 

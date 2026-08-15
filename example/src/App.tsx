@@ -40,11 +40,11 @@ export default function App() {
           return;
         }
         if (res.errorCode) {
-          setStatus(`error: ${res.errorCode} ${res.errorMessage ?? ''}`);
+          setStatus(`error: ${res.errorCode} ${res.errorMessage}`);
           return;
         }
-        setStatus(`got ${res.assets?.length ?? 0} asset(s)`);
-        setAssets(res.assets ?? []);
+        setStatus(`got ${res.assets.length} asset(s)`);
+        setAssets(res.assets);
       })
       .catch((e: unknown) => {
         setStatus(`threw: ${String(e)}`);
@@ -60,11 +60,11 @@ export default function App() {
           return;
         }
         if (res.errorCode) {
-          setStatus(`error: ${res.errorCode} ${res.errorMessage ?? ''}`);
+          setStatus(`error: ${res.errorCode} ${res.errorMessage}`);
           return;
         }
-        setStatus(`got ${res.assets?.length ?? 0} asset(s)`);
-        setAssets(res.assets ?? []);
+        setStatus(`got ${res.assets.length} asset(s)`);
+        setAssets(res.assets);
       })
       .catch((e: unknown) => {
         setStatus(`threw: ${String(e)}`);
@@ -85,11 +85,60 @@ export default function App() {
           return;
         }
         if (res.errorCode) {
-          setStatus(`error: ${res.errorCode} ${res.errorMessage ?? ''}`);
+          setStatus(`error: ${res.errorCode} ${res.errorMessage}`);
           return;
         }
-        setStatus(`captured ${res.assets?.length ?? 0} asset(s)`);
-        setAssets(res.assets ?? []);
+        setStatus(`captured ${res.assets.length} asset(s)`);
+        setAssets(res.assets);
+      })
+      .catch((e: unknown) => {
+        setStatus(`threw: ${String(e)}`);
+      });
+  };
+
+  const record = () => {
+    setStatus('recording…');
+    launchCamera({
+      mediaType: 'video',
+      maxDuration: 30,
+      videoQuality: 'medium',
+      includeThumbnail: true,
+    })
+      .then((res) => {
+        if (res.didCancel) {
+          setStatus('cancelled');
+          return;
+        }
+        if (res.errorCode) {
+          setStatus(`error: ${res.errorCode} ${res.errorMessage}`);
+          return;
+        }
+        setStatus(`recorded ${res.assets.length} video(s)`);
+        setAssets(res.assets);
+      })
+      .catch((e: unknown) => {
+        setStatus(`threw: ${String(e)}`);
+      });
+  };
+
+  const pickScrubbed = () => {
+    setStatus('picking…');
+    launchImageLibrary({
+      selectionLimit: 1,
+      includeExif: true,
+      stripMetadata: true,
+    })
+      .then((res) => {
+        if (res.didCancel) {
+          setStatus('cancelled');
+          return;
+        }
+        if (res.errorCode) {
+          setStatus(`error: ${res.errorCode} ${res.errorMessage}`);
+          return;
+        }
+        setStatus(`exif: ${JSON.stringify(res.assets[0]?.exif ?? null)}`);
+        setAssets(res.assets);
       })
       .catch((e: unknown) => {
         setStatus(`threw: ${String(e)}`);
@@ -150,6 +199,11 @@ export default function App() {
         <Button title="Pick videos (3)" onPress={() => pickMedia('video')} />
         <Button title="Pick mixed (3)" onPress={() => pickMedia('mixed')} />
         <Button title={`Take photo (${facing})`} onPress={capture} />
+        <Button title="Record video (30s)" onPress={record} />
+        <Button
+          title="Pick, strip metadata, read exif"
+          onPress={pickScrubbed}
+        />
         <Button
           title="Toggle front/back"
           onPress={() => setFacing((f) => (f === 'back' ? 'front' : 'back'))}
@@ -184,6 +238,7 @@ export default function App() {
                 ? `${a.thumbnailWidth}x${a.thumbnailHeight}`
                 : 'none'
             }`}</Text>
+            <Text>{`exif: ${a.exif ? JSON.stringify(a.exif) : 'none'}`}</Text>
             <Button title="Release this asset" onPress={() => release(a)} />
           </View>
         ))}
