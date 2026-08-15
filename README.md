@@ -267,14 +267,24 @@ reports the value the original carried. `width`/`height` are the authority on
 the file you were handed; read `orientation` as a fact about where the photo
 came from, not as an instruction for rendering it.
 
-For a **camera capture** the values come from the metadata dictionary the system
-picker hands over rather than from a file, since the capture is re-encoded from
-raw pixels and the written file has no EXIF of its own.
+For a **camera capture on iOS** the values come from the metadata dictionary the
+system picker hands over rather than from a file: the capture arrives already
+decoded and is always re-encoded, so the file that is written carries no EXIF of
+its own.
+
+**On Android a capture is the other way round**, and the difference points the
+opposite way for privacy, so it is worth being explicit. A capture there goes
+through the ordinary photo path: `exif` is read from the file the camera app
+wrote, and — with no resize asked for and `format: 'original'` — that file is
+copied through **verbatim**, so whatever EXIF and GPS the camera app recorded is
+still inside the asset you get back. `stripMetadata: true` is what removes it,
+and for Android captures it does real work; that is the converse of the "no-op
+on iOS" note in the [`CameraOptions`](#cameraoptions) table.
 
 ### `stripMetadata`
 
-`stripMetadata: true` guarantees the photo written to `uri` carries no EXIF and
-no GPS. There are two ways to get there, and which one an asset takes is worth
+`stripMetadata: true` removes the EXIF and the GPS from the photo written to
+`uri`. There are two ways to get there, and which one an asset takes is worth
 knowing, because only one of them is free:
 
 - **Rewriting the container in place.** The already-compressed pixel data is
@@ -284,9 +294,13 @@ knowing, because only one of them is free:
   decoded and written afresh, so `fileSize` changes, `type` and `fileName` can
   change with it, and the pixels are no longer the source's.
 
-`orientation` always survives either route. Dropping it would render a
-quarter-turned photo sideways, and the reported `width`/`height` already assume
-it is there.
+The photo's **rendered orientation** survives either route, though by different
+means. The in-place rewrite keeps the EXIF orientation tag — dropping it would
+render a quarter-turned photo sideways, and the reported `width`/`height` already
+assume it is there. The re-encode bakes the rotation into the pixels instead and
+writes a file with no EXIF at all, so there is no orientation tag left to read
+back; the image is simply upright. Either way `width`/`height` describe what you
+were handed.
 
 | Source | iOS | Android |
 |---|---|---|
@@ -306,8 +320,9 @@ never carried. Both platforms leave GIFs exactly as they arrived.
 
 **An animated WebP on iOS is a genuine passthrough.** iOS ships no WebP encoder
 at all, so the container cannot be rewritten, and a re-encode would leave one
-frame of an animation. The frames win: this is the one input where
-`stripMetadata: true` returns a file that may still carry metadata. A **static**
+frame of an animation. The frames win: on iOS this is the input where
+`stripMetadata: true` is not applied at all, so the file comes back as it
+arrived and may still carry everything it did. A **static**
 WebP takes the re-encode instead and does honour the option, coming back as
 `image/jpeg`. Android rewrites both in place and honours the option for each.
 
@@ -327,16 +342,20 @@ guarantee on undocumented behaviour, both platforms decline the rewrite and
 re-encode. Photos that went through Lightroom, Google Photos or a similar
 pipeline commonly carry a packet. The consequence is worth stating plainly: **a JPEG
 asked for with `format: 'original'` and no resize comes back materially larger**
-than the untouched passthrough the caller expected. Quality is not reduced —
-`quality` defaults to `1` — which is exactly why the file grows.
+than the untouched passthrough the caller expected. At the default `quality: 1`
+nothing is thrown away, which is exactly why the file grows. A `quality` you set
+yourself **does** apply to this re-encode, so `quality: 0.6` on a source you
+expected to be passed through untouched genuinely re-compresses it.
 
 **Two more channels take the re-encode on Android**, because `saveAttributes`
 copies them across untouched: an IPTC block (JPEG `APP13`, written by Photoshop
 and the newsroom tooling that follows it — creator, city, contact, copyright)
 and PNG text chunks (`tEXt`/`zTXt`/`iTXt` — Author, Comment, Software). A source
-carrying either is re-encoded and comes back larger, same as an XMP one. On iOS
-those two channels are removed in place by the writer itself, so a JPEG with
-IPTC or a PNG with text chunks is still scrubbed losslessly there.
+carrying either is re-encoded, same as an XMP one, and comes back a different
+size — usually larger, but a PNG re-encoded because of a `tEXt` chunk goes back
+out as PNG at Android's own deflate settings and can land either side of the
+source. On iOS those two channels are removed in place by the writer itself, so
+a JPEG with IPTC or a PNG with text chunks is still scrubbed losslessly there.
 
 The one place that leaves an asset with nowhere to go is an **animated WebP on
 Android that also carries residue**: it cannot be scrubbed cleanly and it cannot
@@ -347,13 +366,21 @@ WebP.
 **JPEG `COM` comment segments survive a scrub on Android.** A `COM` segment has
 no identifier to detect and no defined semantics; in practice it holds encoder
 signatures (`"Created with GIMP"` and the like) rather than anything about the
-photographer. iOS's container rewrite does not carry them across, so the two
-platforms differ here. It is a real gap in "carries no metadata" if you read
-that phrase at its widest — EXIF and GPS are what is guaranteed.
+photographer. A `COM` has no representation in the properties dictionary iOS
+rewrites the container from, so it should not survive there — but that is the
+mechanism talking, not a check the library performs.
+
+**And a scrub can leave IFD1 behind on Android.** `ExifInterface` skips the
+thumbnail IFD when the file reports no thumbnail, while its writer emits every
+non-empty IFD, so a JPEG whose IFD1 holds tags but whose thumbnail pointer is
+absent or zero-length keeps those tags. Narrow, and never GPS — but it is why
+this section says the EXIF and GPS *are removed* rather than promising a file
+that provably carries nothing at all.
 
 **A scrub that fails falls through to a re-encode** on both platforms, rather
-than returning a half-stripped file. So a strip you asked for is never quietly
-skipped, and the animated WebP above is the single exception to that.
+than returning a half-stripped file: a strip that cannot be done losslessly is
+done destructively instead of being abandoned. The animated WebP above is the
+one input skipped entirely.
 
 ### Without `stripMetadata`
 
@@ -412,9 +439,11 @@ const result = await launchCamera({
 
 The result is the same shape as a video picked from the library — `duration`,
 displayed `width`/`height`, `fileSize`, and `thumbnailUri` when you ask for it —
-so [Video assets](#video-assets) describes it in full. The recording is never
-transcoded, and `fileName` is the generated `media_picker_<uuid>.<ext>`, since a
-fresh recording has no name in the gallery. `type` is `video/quicktime` on iOS
+so [Video assets](#video-assets) describes it in full. This library never
+transcodes the recording — it copies out what the camera wrote, which is where
+`videoQuality` had its say — and `fileName` is the generated
+`media_picker_<uuid>.<ext>`, since a fresh recording has no name in the gallery.
+`type` is `video/quicktime` on iOS
 and `video/mp4` on Android — though a camera app that ignores the output file
 and hands back a content uri of its own can report a different video mime, which
 is passed through exactly as a picked one would be.
