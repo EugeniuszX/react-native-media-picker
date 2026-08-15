@@ -8,12 +8,12 @@ import org.junit.Test
 class MetadataPlanTest {
   @Test fun stripDisabledAlwaysSkips() {
     for (willTransform in listOf(true, false)) {
-      for (isAnimated in listOf(true, false)) {
+      for (preserveSource in listOf(true, false)) {
         for (canScrub in listOf(true, false)) {
           assertEquals(
-            "transform $willTransform animated $isAnimated canScrub $canScrub",
+            "transform $willTransform preserve $preserveSource canScrub $canScrub",
             MetadataAction.SKIP,
-            MetadataPlan.resolve(false, willTransform, isAnimated, canScrub),
+            MetadataPlan.resolve(false, willTransform, preserveSource, canScrub),
           )
         }
       }
@@ -25,7 +25,7 @@ class MetadataPlanTest {
     assertEquals(MetadataAction.SKIP, MetadataPlan.resolve(true, true, false, false))
   }
 
-  @Test fun animatedSourcesAreNeverTouched() {
+  @Test fun preservedSourcesAreNeverTouched() {
     assertEquals(MetadataAction.SKIP, MetadataPlan.resolve(true, false, true, true))
     assertEquals(MetadataAction.SKIP, MetadataPlan.resolve(true, false, true, false))
   }
@@ -36,6 +36,21 @@ class MetadataPlanTest {
 
   @Test fun unscrubbableStillImageIsReencoded() {
     assertEquals(MetadataAction.FORCE_REENCODE, MetadataPlan.resolve(true, false, false, false))
+  }
+
+  @Test fun animatedSourcesArePreserved() {
+    assertTrue(MetadataPlan.preservesSource("image/webp", preserveAnimation = true))
+  }
+
+  @Test fun gifsArePreservedEvenWhenStatic() {
+    assertTrue(MetadataPlan.preservesSource("image/gif", preserveAnimation = false))
+    assertTrue(MetadataPlan.preservesSource("image/gif", preserveAnimation = true))
+  }
+
+  @Test fun staticNonGifSourcesAreNotPreserved() {
+    for (mime in listOf("image/jpeg", "image/png", "image/heic", "image/webp")) {
+      assertFalse(mime, MetadataPlan.preservesSource(mime, preserveAnimation = false))
+    }
   }
 
   @Test fun canScrubCoversTheContainersExifInterfaceCanWrite() {

@@ -16,17 +16,27 @@ internal object MetadataPlan {
   fun resolve(
     stripMetadata: Boolean,
     willTransform: Boolean,
-    isAnimated: Boolean,
+    preserveSource: Boolean,
     canScrub: Boolean,
   ): MetadataAction = when {
     !stripMetadata -> MetadataAction.SKIP
     // A re-encode decodes to a bitmap and writes fresh bytes, so no metadata survives it.
     willTransform -> MetadataAction.SKIP
-    // Animated sources are never modified — re-encoding them would lose the animation.
-    isAnimated -> MetadataAction.SKIP
+    // Some sources must come back byte-for-byte: an animated one would lose its frames to a
+    // re-encode, and a GIF would be flattened into a JPEG to remove metadata it never had.
+    preserveSource -> MetadataAction.SKIP
     canScrub -> MetadataAction.SCRUB
     else -> MetadataAction.FORCE_REENCODE
   }
+
+  /**
+   * Whether a source must come back byte-for-byte, which is what [resolve]'s `preserveSource`
+   * expects. Two independent reasons: an animated source would lose its frames to a re-encode,
+   * and a GIF re-encodes to JPEG — flattening any transparency onto black to remove metadata a
+   * GIF never carries in the first place. So a GIF is preserved whether animated or not.
+   */
+  fun preservesSource(mime: String, preserveAnimation: Boolean): Boolean =
+    preserveAnimation || mime == "image/gif"
 
   /**
    * The containers [androidx.exifinterface.media.ExifInterface.saveAttributes] can write.

@@ -38,5 +38,20 @@ internal object ResponseFactory {
       putInt("thumbnailWidth", it.width)
       putInt("thumbnailHeight", it.height)
     }
+    asset.exif?.let { putMap("exif", exifMap(it)) }
+  }
+
+  private fun exifMap(exif: ExifPayload): WritableMap = Arguments.createMap().apply {
+    exif.dateTimeOriginal?.let { putString("dateTimeOriginal", it) }
+    exif.latitude?.let { putDouble("latitude", it) }
+    exif.longitude?.let { putDouble("longitude", it) }
+    exif.altitude?.let { putDouble("altitude", it) }
+    exif.make?.let { putString("make", it) }
+    exif.model?.let { putString("model", it) }
+    exif.orientation?.let { putInt("orientation", it) }
+    exif.iso?.let { putInt("iso", it) }
+    exif.fNumber?.let { putDouble("fNumber", it) }
+    exif.exposureTime?.let { putDouble("exposureTime", it) }
+    exif.focalLength?.let { putDouble("focalLength", it) }
   }
 }

@@ -37,6 +37,8 @@ internal data class LibraryOptions(
   val format: RequestedFormat,
   val mediaType: RequestedMediaType,
   val includeThumbnail: Boolean,
+  val includeExif: Boolean,
+  val stripMetadata: Boolean,
 ) {
   companion object {
     fun from(map: ReadableMap) = LibraryOptions(
@@ -48,6 +50,8 @@ internal data class LibraryOptions(
       format = RequestedFormat.from(map.getString("format")),
       mediaType = RequestedMediaType.from(map.getString("mediaType")),
       includeThumbnail = map.getBoolean("includeThumbnail"),
+      includeExif = map.getBoolean("includeExif"),
+      stripMetadata = map.getBoolean("stripMetadata"),
     )
   }
 }

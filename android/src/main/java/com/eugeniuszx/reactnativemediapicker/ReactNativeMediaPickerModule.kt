@@ -264,6 +264,8 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
                     options.maxHeight,
                     options.quality,
                     options.includeBase64,
+                    options.stripMetadata,
+                    options.includeExif,
                     suggestedName,
                   )
                 }

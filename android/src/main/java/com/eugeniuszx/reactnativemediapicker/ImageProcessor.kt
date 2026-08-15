@@ -22,11 +22,14 @@ internal class ImageProcessor(
     maxHeight: Int,
     quality: Int,
     includeBase64: Boolean,
+    stripMetadata: Boolean = false,
+    includeExif: Boolean = false,
     suggestedName: String? = null,
   ): AssetPayload {
     val srcMime = MediaFormat.normalizeMime(resolver.getType(uri))
     val bounds = readBounds(uri)
     val orientation = readOrientation(uri)
+    val exif = if (includeExif) ExifReader.read(resolver, uri) else null
     val isAnimated = srcMime == "image/gif" ||
       (srcMime == "image/webp" && isAnimatedWebp(uri))
 
@@ -40,11 +43,27 @@ internal class ImageProcessor(
       isAnimated = output.preserveAnimation,
     )
 
-    return if (plan.needsTransform || output.forceReencode) {
-      transform(uri, output.target, plan, orientation, quality, includeBase64, suggestedName)
-    } else {
-      passthrough(uri, srcMime, plan, includeBase64, suggestedName)
+    val willTransform = plan.needsTransform || output.forceReencode
+    val action = MetadataPlan.resolve(
+      stripMetadata = stripMetadata,
+      willTransform = willTransform,
+      preserveSource = MetadataPlan.preservesSource(srcMime, output.preserveAnimation),
+      canScrub = MetadataPlan.canScrub(srcMime),
+    )
+
+    if (willTransform || action == MetadataAction.FORCE_REENCODE) {
+      return transform(
+        uri, output.target, plan, orientation, quality, includeBase64, suggestedName, exif,
+      )
     }
+
+    // A failed scrub falls through to a re-encode, so a strip request is never silently ignored.
+    return passthrough(
+      uri, srcMime, plan, includeBase64, suggestedName,
+      scrub = action == MetadataAction.SCRUB, exif = exif,
+    ) ?: transform(
+      uri, output.target, plan, orientation, quality, includeBase64, suggestedName, exif,
+    )
   }
 
   private fun readBounds(uri: Uri): Pair<Int, Int> {
@@ -90,20 +109,28 @@ internal class ImageProcessor(
     plan: DecodePlan,
     includeBase64: Boolean,
     suggestedName: String?,
-  ): AssetPayload {
+    scrub: Boolean,
+    exif: ExifPayload?,
+  ): AssetPayload? {
     val outFile = tempFiles.createFile(MediaFormat.extensionForMime(mime))
-    var base64: String? = null
     resolver.openInputStream(uri).use { input ->
       input ?: throw IllegalStateException("Failed to open image stream")
-      if (includeBase64) {
-        val bytes = input.readBytes()
-        outFile.writeBytes(bytes)
-        base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
-      } else {
-        FileOutputStream(outFile).use { output -> input.copyTo(output) }
-      }
+      FileOutputStream(outFile).use { output -> input.copyTo(output) }
     }
-    return payload(outFile, mime, plan.displayWidth, plan.displayHeight, base64, suggestedName)
+
+    if (scrub && !MetadataScrubber.scrub(outFile)) {
+      outFile.delete()
+      return null
+    }
+
+    val base64 = if (includeBase64) {
+      Base64.encodeToString(outFile.readBytes(), Base64.NO_WRAP)
+    } else {
+      null
+    }
+    return payload(
+      outFile, mime, plan.displayWidth, plan.displayHeight, base64, suggestedName, exif,
+    )
   }
 
   private fun transform(
@@ -114,6 +141,7 @@ internal class ImageProcessor(
     quality: Int,
     includeBase64: Boolean,
     suggestedName: String?,
+    exif: ExifPayload?,
   ): AssetPayload {
     val decodeOptions = BitmapFactory.Options().apply { inSampleSize = plan.sampleSize }
     var bitmap = resolver.openInputStream(uri).use {
@@ -142,7 +170,7 @@ internal class ImageProcessor(
     } else {
       null
     }
-    return payload(outFile, outMime, width, height, base64, suggestedName)
+    return payload(outFile, outMime, width, height, base64, suggestedName, exif)
   }
 
   private fun applyOrientation(bitmap: Bitmap, orientation: ExifOrientation): Bitmap {
@@ -184,6 +212,7 @@ internal class ImageProcessor(
     height: Int,
     base64: String?,
     suggestedName: String?,
+    exif: ExifPayload?,
   ) = AssetPayload(
     uri = Uri.fromFile(file).toString(),
     mime = mime,
@@ -192,5 +221,6 @@ internal class ImageProcessor(
     width = width,
     height = height,
     base64 = base64,
+    exif = exif,
   )
 }
