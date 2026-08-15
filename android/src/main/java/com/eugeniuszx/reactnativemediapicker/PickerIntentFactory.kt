@@ -42,6 +42,25 @@ internal class PickerIntentFactory(private val context: Context) {
       }
     }
 
+  fun videoCapture(
+    outputUri: Uri,
+    facing: CameraFacing,
+    maxDurationSeconds: Int,
+    videoQuality: VideoQuality,
+  ): Intent = Intent(MediaStore.ACTION_VIDEO_CAPTURE).apply {
+    putExtra(MediaStore.EXTRA_OUTPUT, outputUri)
+    addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+    if (maxDurationSeconds > 0) {
+      putExtra(MediaStore.EXTRA_DURATION_LIMIT, maxDurationSeconds)
+    }
+    putExtra(MediaStore.EXTRA_VIDEO_QUALITY, videoQuality.intentExtra)
+    if (facing == CameraFacing.FRONT) {
+      putExtra("android.intent.extras.CAMERA_FACING", 1)
+      putExtra("android.intent.extras.LENS_FACING_FRONT", 1)
+      putExtra("android.intent.extra.USE_FRONT_CAMERA", true)
+    }
+  }
+
   @Suppress("DEPRECATION")
   fun canBeHandled(intent: Intent): Boolean =
     context.packageManager.queryIntentActivities(intent, 0).isNotEmpty()

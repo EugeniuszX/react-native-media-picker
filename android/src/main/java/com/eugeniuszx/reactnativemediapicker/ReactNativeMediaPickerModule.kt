@@ -194,12 +194,18 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
     val request = pending.peek() ?: return
 
     try {
-      val photoFile = tempFiles.createFile("jpg").apply { createNewFile() }
-      request.cameraFile = photoFile
+      val isVideo = options.mediaType == CameraMediaType.VIDEO
+      val captureFile = tempFiles.createFile(if (isVideo) "mp4" else "jpg")
+        .apply { createNewFile() }
+      request.cameraFile = captureFile
 
       val authority = "${reactContext.packageName}.rnmediapicker.fileprovider"
-      val outputUri = FileProvider.getUriForFile(reactContext, authority, photoFile)
-      val intent = intents.imageCapture(outputUri, options.facing)
+      val outputUri = FileProvider.getUriForFile(reactContext, authority, captureFile)
+      val intent = if (isVideo) {
+        intents.videoCapture(outputUri, options.facing, options.maxDuration, options.videoQuality)
+      } else {
+        intents.imageCapture(outputUri, options.facing)
+      }
 
       if (!intents.canBeHandled(intent)) {
         fail(PickerError.CAMERA_UNAVAILABLE, "No camera app available")
@@ -218,7 +224,7 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
     data: Intent?,
   ) {
     when (requestCode) {
-      CAMERA_REQUEST_CODE -> handleCameraResult(resultCode)
+      CAMERA_REQUEST_CODE -> handleCameraResult(resultCode, data)
       REQUEST_CODE -> handleLibraryResult(resultCode, data)
     }
   }
@@ -330,7 +336,7 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
     }
   }
 
-  private fun handleCameraResult(resultCode: Int) {
+  private fun handleCameraResult(resultCode: Int, data: Intent?) {
     val request = pending.peek() ?: return
     val file = request.cameraFile
 
@@ -340,6 +346,36 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
         request,
         ResponseFactory.failure(PickerError.OTHERS, "Mismatched picker result"),
       )
+      return
+    }
+
+    if (options.mediaType == CameraMediaType.VIDEO) {
+      // Some camera apps ignore EXTRA_OUTPUT and hand back a content uri instead.
+      val source = when {
+        file != null && file.exists() && file.length() > 0L -> Uri.fromFile(file)
+        data?.data != null -> data.data
+        else -> null
+      }
+      if (resultCode != Activity.RESULT_OK || source == null) {
+        file?.delete()
+        settleAndRelease(request, ResponseFactory.cancelled())
+        return
+      }
+      moduleScope.launch {
+        try {
+          val asset = videoProcessor.process(source, options.includeThumbnail)
+          settleAndRelease(request, ResponseFactory.success(listOf(asset)))
+        } catch (e: CancellationException) {
+          throw e
+        } catch (e: Exception) {
+          settleAndRelease(
+            request,
+            ResponseFactory.failure(PickerError.OTHERS, e.message ?: "processing error"),
+          )
+        } finally {
+          file?.delete()
+        }
+      }
       return
     }
 
@@ -354,12 +390,14 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
     moduleScope.launch {
       try {
         val asset = processor.process(
-          Uri.fromFile(file),
-          options.format,
-          options.maxWidth,
-          options.maxHeight,
-          options.quality,
-          options.includeBase64,
+          uri = Uri.fromFile(file),
+          format = options.format,
+          maxWidth = options.maxWidth,
+          maxHeight = options.maxHeight,
+          quality = options.quality,
+          includeBase64 = options.includeBase64,
+          stripMetadata = options.stripMetadata,
+          includeExif = options.includeExif,
         )
         settleAndRelease(request, ResponseFactory.success(listOf(asset)))
       } catch (e: CancellationException) {

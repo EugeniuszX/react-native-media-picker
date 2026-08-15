@@ -13,6 +13,32 @@ internal enum class CameraFacing {
   }
 }
 
+internal enum class CameraMediaType {
+  PHOTO,
+  VIDEO,
+  ;
+
+  companion object {
+    fun from(raw: String?): CameraMediaType = if (raw == "video") VIDEO else PHOTO
+  }
+}
+
+/** [android.provider.MediaStore.EXTRA_VIDEO_QUALITY] only carries 0 (low) or 1 (high). */
+internal enum class VideoQuality(val intentExtra: Int) {
+  LOW(0),
+  MEDIUM(1),
+  HIGH(1),
+  ;
+
+  companion object {
+    fun from(raw: String?): VideoQuality = when (raw) {
+      "low" -> LOW
+      "medium" -> MEDIUM
+      else -> HIGH
+    }
+  }
+}
+
 internal enum class RequestedMediaType {
   PHOTO,
   VIDEO,
@@ -58,20 +84,32 @@ internal data class LibraryOptions(
 
 internal data class CameraOptions(
   val facing: CameraFacing,
+  val mediaType: CameraMediaType,
   val maxWidth: Int,
   val maxHeight: Int,
   val quality: Int,
   val includeBase64: Boolean,
   val format: RequestedFormat,
+  val maxDuration: Int,
+  val videoQuality: VideoQuality,
+  val includeThumbnail: Boolean,
+  val includeExif: Boolean,
+  val stripMetadata: Boolean,
 ) {
   companion object {
     fun from(map: ReadableMap) = CameraOptions(
       facing = CameraFacing.from(map.getString("cameraType")),
+      mediaType = CameraMediaType.from(map.getString("mediaType")),
       maxWidth = map.getInt("maxWidth"),
       maxHeight = map.getInt("maxHeight"),
       quality = toCompressQuality(map.getDouble("quality")),
       includeBase64 = map.getBoolean("includeBase64"),
       format = RequestedFormat.from(map.getString("format")),
+      maxDuration = map.getInt("maxDuration"),
+      videoQuality = VideoQuality.from(map.getString("videoQuality")),
+      includeThumbnail = map.getBoolean("includeThumbnail"),
+      includeExif = map.getBoolean("includeExif"),
+      stripMetadata = map.getBoolean("stripMetadata"),
     )
   }
 }
