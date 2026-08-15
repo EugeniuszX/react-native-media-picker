@@ -58,11 +58,17 @@ import UIKit
 
   @objc public func launchCamera(
     cameraType: String,
+    mediaType: String,
     maxWidth: Int,
     maxHeight: Int,
     quality: Double,
     format: String,
+    maxDuration: Int,
+    videoQuality: String,
     includeBase64: Bool,
+    includeThumbnail: Bool,
+    includeExif: Bool,
+    stripMetadata: Bool,
     completion: @escaping ([[String: Any]]?, Bool, String?, String?) -> Void
   ) {
     guard session.begin(completion) else {
@@ -71,14 +77,21 @@ import UIKit
     }
     let options = CameraOptions(
       facing: CameraFacing.from(rawValue: cameraType),
+      mediaType: CameraMediaType.from(rawValue: mediaType),
       maxWidth: maxWidth,
       maxHeight: maxHeight,
       quality: quality,
       includeBase64: includeBase64,
-      format: RequestedFormat.from(rawValue: format)
+      format: RequestedFormat.from(rawValue: format),
+      maxDuration: maxDuration,
+      videoQuality: VideoQuality.from(rawValue: videoQuality),
+      includeThumbnail: includeThumbnail,
+      includeExif: includeExif,
+      stripMetadata: stripMetadata
     )
-    let picker = CameraPicker(options: options, processor: processor) {
-      [weak self] assets, didCancel, error, message in
+    let picker = CameraPicker(
+      options: options, processor: processor, videoProcessor: videoProcessor
+    ) { [weak self] assets, didCancel, error, message in
       self?.finish(assets, didCancel, error, message)
     }
     if !picker.start() {
