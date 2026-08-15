@@ -16,6 +16,7 @@ struct AssetPayload: Equatable {
   let base64: String?
   var duration: Double? = nil
   var thumbnail: Thumbnail? = nil
+  var exif: ExifPayload? = nil
 
   var dictionary: [String: Any] {
     var dict: [String: Any] = [
@@ -36,6 +37,9 @@ struct AssetPayload: Equatable {
       dict["thumbnailUri"] = thumbnail.uri
       dict["thumbnailWidth"] = thumbnail.width
       dict["thumbnailHeight"] = thumbnail.height
+    }
+    if let exif {
+      dict["exif"] = exif.dictionary
     }
     return dict
   }

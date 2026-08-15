@@ -5,17 +5,17 @@ import XCTest
 final class MetadataPlanTests: XCTestCase {
   func testStripDisabledAlwaysSkips() {
     for willTransform in [true, false] {
-      for isAnimated in [true, false] {
+      for preserveSource in [true, false] {
         for canScrub in [true, false] {
           XCTAssertEqual(
             MetadataPlan.resolve(
               stripMetadata: false,
               willTransform: willTransform,
-              isAnimated: isAnimated,
+              preserveSource: preserveSource,
               canScrub: canScrub
             ),
             .skip,
-            "transform \(willTransform) animated \(isAnimated) canScrub \(canScrub)"
+            "transform \(willTransform) preserve \(preserveSource) canScrub \(canScrub)"
           )
         }
       }
@@ -25,12 +25,12 @@ final class MetadataPlanTests: XCTestCase {
   func testTransformAlreadyDropsMetadata() {
     XCTAssertEqual(
       MetadataPlan.resolve(
-        stripMetadata: true, willTransform: true, isAnimated: false, canScrub: true),
+        stripMetadata: true, willTransform: true, preserveSource: false, canScrub: true),
       .skip
     )
     XCTAssertEqual(
       MetadataPlan.resolve(
-        stripMetadata: true, willTransform: true, isAnimated: false, canScrub: false),
+        stripMetadata: true, willTransform: true, preserveSource: false, canScrub: false),
       .skip
     )
   }
@@ -38,12 +38,12 @@ final class MetadataPlanTests: XCTestCase {
   func testAnimatedSourcesAreNeverTouched() {
     XCTAssertEqual(
       MetadataPlan.resolve(
-        stripMetadata: true, willTransform: false, isAnimated: true, canScrub: true),
+        stripMetadata: true, willTransform: false, preserveSource: true, canScrub: true),
       .skip
     )
     XCTAssertEqual(
       MetadataPlan.resolve(
-        stripMetadata: true, willTransform: false, isAnimated: true, canScrub: false),
+        stripMetadata: true, willTransform: false, preserveSource: true, canScrub: false),
       .skip
     )
   }
@@ -51,7 +51,7 @@ final class MetadataPlanTests: XCTestCase {
   func testScrubbableStillImageIsScrubbed() {
     XCTAssertEqual(
       MetadataPlan.resolve(
-        stripMetadata: true, willTransform: false, isAnimated: false, canScrub: true),
+        stripMetadata: true, willTransform: false, preserveSource: false, canScrub: true),
       .scrub
     )
   }
@@ -59,7 +59,7 @@ final class MetadataPlanTests: XCTestCase {
   func testUnscrubbableStillImageIsReencoded() {
     XCTAssertEqual(
       MetadataPlan.resolve(
-        stripMetadata: true, willTransform: false, isAnimated: false, canScrub: false),
+        stripMetadata: true, willTransform: false, preserveSource: false, canScrub: false),
       .forceReencode
     )
   }

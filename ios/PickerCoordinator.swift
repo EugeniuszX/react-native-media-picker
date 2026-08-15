@@ -30,6 +30,8 @@ import UIKit
     mediaType: String,
     includeBase64: Bool,
     includeThumbnail: Bool,
+    includeExif: Bool,
+    stripMetadata: Bool,
     completion: @escaping ([[String: Any]]?, Bool, String?, String?) -> Void
   ) {
     guard session.begin(completion) else {
@@ -44,7 +46,9 @@ import UIKit
       includeBase64: includeBase64,
       format: RequestedFormat.from(rawValue: format),
       mediaType: RequestedMediaType.from(rawValue: mediaType),
-      includeThumbnail: includeThumbnail
+      includeThumbnail: includeThumbnail,
+      includeExif: includeExif,
+      stripMetadata: stripMetadata
     )
     LibraryPicker(options: options, processor: processor, videoProcessor: videoProcessor) {
       [weak self] assets, didCancel, error, message in

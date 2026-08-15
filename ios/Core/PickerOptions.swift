@@ -18,6 +18,8 @@ struct LibraryOptions: Equatable {
   let format: RequestedFormat
   let mediaType: RequestedMediaType
   let includeThumbnail: Bool
+  let includeExif: Bool
+  let stripMetadata: Bool
 }
 
 struct CameraOptions: Equatable {

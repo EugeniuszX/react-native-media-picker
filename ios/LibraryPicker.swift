@@ -154,6 +154,8 @@ final class LibraryPicker: NSObject, PHPickerViewControllerDelegate,
               maxHeight: self.options.maxHeight,
               quality: self.options.quality,
               includeBase64: self.options.includeBase64,
+              stripMetadata: self.options.stripMetadata,
+              includeExif: self.options.includeExif,
               suggestedName: provider.suggestedName
             )
           else { return }
