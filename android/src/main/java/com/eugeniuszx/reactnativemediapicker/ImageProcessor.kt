@@ -118,7 +118,14 @@ internal class ImageProcessor(
       FileOutputStream(outFile).use { output -> input.copyTo(output) }
     }
 
-    if (scrub && !MetadataScrubber.scrub(outFile)) {
+    // A source carrying an XMP packet is declined before the scrub is even attempted:
+    // ExifInterface cannot remove XMP, and a packet can carry `exif:GPSLatitude`, `tiff:Make` and
+    // `tiff:Model` of its own — so a scrubbed file would still leak exactly what the caller asked
+    // to remove. Returning null sends it down the re-encode path instead, which produces a
+    // metadata-free file by construction. The re-encode is the deliberate price of a guarantee
+    // that holds for every input rather than one that quietly leaks for files from an
+    // XMP-writing pipeline (Lightroom, Google Photos).
+    if (scrub && (XMPPacket.isPresent(outFile) || !MetadataScrubber.scrub(outFile))) {
       outFile.delete()
       return null
     }

@@ -258,15 +258,15 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
                   videoProcessor.process(uri, options.includeThumbnail, suggestedName)
                 } else {
                   processor.process(
-                    uri,
-                    options.format,
-                    options.maxWidth,
-                    options.maxHeight,
-                    options.quality,
-                    options.includeBase64,
-                    options.stripMetadata,
-                    options.includeExif,
-                    suggestedName,
+                    uri = uri,
+                    format = options.format,
+                    maxWidth = options.maxWidth,
+                    maxHeight = options.maxHeight,
+                    quality = options.quality,
+                    includeBase64 = options.includeBase64,
+                    stripMetadata = options.stripMetadata,
+                    includeExif = options.includeExif,
+                    suggestedName = suggestedName,
                   )
                 }
               } catch (e: CancellationException) {
