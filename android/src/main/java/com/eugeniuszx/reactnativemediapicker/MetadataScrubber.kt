@@ -188,10 +188,21 @@ internal object MetadataScrubber {
   )
 
   /**
-   * Rewrites the container in place without its metadata. Pixel data is left alone.
+   * Rewrites the container in place without the EXIF attributes in [STRIPPED_TAGS]. Pixel data is
+   * left alone.
    *
-   * Note this cannot remove an XMP packet — `ExifInterface` does not model XMP at all — so the
-   * caller gates on [XMPPacket] first and re-encodes instead when one is present.
+   * The scope is exactly that one segment. `saveAttributes` replaces the JPEG `APP1`, PNG `eXIf`
+   * or WebP `EXIF` block and copies every other segment and chunk across verbatim, so it does not
+   * touch:
+   *  - an XMP packet, a Photoshop `APP13` block (IPTC-IIM creator, city, contact) or PNG
+   *    `tEXt`/`zTXt`/`iTXt` credits. The caller gates on [MetadataResidue] first and re-encodes
+   *    instead when it finds any of them, which is what actually removes them.
+   *  - a JPEG `COM` comment, which has no fixed identifier to detect and so survives a scrub.
+   *
+   * And a complete tag list is not the same as complete removal:
+   * [ExifInterface.setAttribute] skips the thumbnail IFD when the file has no thumbnail, while
+   * `writeExifSegment` writes out every non-empty IFD — so a JPEG whose IFD1 holds tags but whose
+   * thumbnail pointer is absent or zero-length keeps those IFD1 tags.
    */
   fun scrub(file: File): Boolean = try {
     val exif = ExifInterface(file)
