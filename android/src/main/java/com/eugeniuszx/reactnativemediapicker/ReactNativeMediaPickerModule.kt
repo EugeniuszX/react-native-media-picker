@@ -372,6 +372,11 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
             request,
             ResponseFactory.failure(PickerError.OTHERS, e.message ?: "processing error"),
           )
+        } catch (e: OutOfMemoryError) {
+          settleAndRelease(
+            request,
+            ResponseFactory.failure(PickerError.OTHERS, "Out of memory while processing the video"),
+          )
         } finally {
           file?.delete()
         }
