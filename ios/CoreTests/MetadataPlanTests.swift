@@ -118,11 +118,30 @@ final class MetadataPlanTests: XCTestCase {
     }
   }
 
+  /// JPEG only — `CGImageDestinationCopyImageSource` was measured to leave PNG `tEXt` credits and
+  /// HEIC Artist/Copyright/Software in place, so those two take the re-encode instead.
   func testCanScrubCoversTheContainersImageIOCanRewrite() {
     XCTAssertTrue(MetadataPlan.canScrub(.jpeg))
-    XCTAssertTrue(MetadataPlan.canScrub(.png))
-    XCTAssertTrue(MetadataPlan.canScrub(.heic))
+    XCTAssertFalse(MetadataPlan.canScrub(.png))
+    XCTAssertFalse(MetadataPlan.canScrub(.heic))
     XCTAssertFalse(MetadataPlan.canScrub(.gif))
     XCTAssertFalse(MetadataPlan.canScrub(.webp))
+  }
+
+  /// A PNG or HEIC asked to strip must not be passed through untouched now that it cannot be
+  /// scrubbed — it re-encodes, which removes the metadata by decoding.
+  func testPngAndHeicReencodeWhenStripped() {
+    for format in [ImageFormat.png, .heic] {
+      XCTAssertEqual(
+        MetadataPlan.resolve(
+          stripMetadata: true,
+          willTransform: false,
+          preserveSource: MetadataPlan.preservesSource(format: format, preserveAnimation: false),
+          canScrub: MetadataPlan.canScrub(format)
+        ),
+        .forceReencode,
+        "\(format)"
+      )
+    }
   }
 }

@@ -43,13 +43,18 @@ enum MetadataPlan {
     preserveAnimation || format == .gif
   }
 
-  /// The containers this library rewrites in place. WebP is excluded because iOS ships no WebP
-  /// encoder at all; GIF is excluded by policy rather than capability — `CGImageDestination` can
-  /// write one, but a rewrite risks the animation, so GIFs are passed through untouched.
+  /// The containers this library rewrites in place: JPEG, and only JPEG.
+  /// `CGImageDestinationCopyImageSource` is the one ImageIO call that leaves the compressed data
+  /// alone, and it was measured to strip completely only for JPEG — on PNG it keeps every `tEXt`
+  /// credit and adds an XMP packet rebuilt from them, and on HEIC it keeps Artist, Copyright,
+  /// DateTime, Software and the XMP. PNG and HEIC therefore re-encode, which is measured clean.
+  /// WebP is excluded because iOS ships no WebP encoder at all; GIF is excluded by policy rather
+  /// than capability — `CGImageDestination` can write one, but a rewrite risks the animation, so
+  /// GIFs are passed through untouched.
   static func canScrub(_ format: ImageFormat) -> Bool {
     switch format {
-    case .jpeg, .png, .heic: return true
-    case .gif, .webp: return false
+    case .jpeg: return true
+    case .png, .heic, .gif, .webp: return false
     }
   }
 }

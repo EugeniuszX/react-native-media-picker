@@ -1,35 +1,28 @@
 import Foundation
 import ImageIO
+import UniformTypeIdentifiers
 
 enum MetadataScrubber {
-  /// The PNG keys that describe how the image should be rendered rather than who made it: gAMA,
-  /// cHRM, sRGB, pHYs and tRNS. They share a dictionary with the `tEXt`/`iTXt` credits, so they
-  /// have to be carried across by hand when that dictionary is replaced.
-  private static let renderingPNGKeys: [CFString] = [
-    kCGImagePropertyPNGGamma,
-    kCGImagePropertyPNGChromaticities,
-    kCGImagePropertyPNGsRGBIntent,
-    kCGImagePropertyPNGXPixelsPerMeter,
-    kCGImagePropertyPNGYPixelsPerMeter,
-    kCGImagePropertyPNGTransparency,
-  ]
-
-  /// Rewrites the container without its identifying metadata. `AddImageFromSource` copies the
-  /// already-compressed image data, so the pixels are untouched and no quality is lost.
-  /// Returns `nil` when the container cannot be rewritten — the caller then re-encodes instead,
-  /// because a half-stripped file is not an acceptable answer to `stripMetadata: true`.
+  /// Rewrites the container without its identifying metadata, leaving the compressed image data
+  /// exactly as it was. Returns `nil` when the container cannot be rewritten that way — the caller
+  /// then re-encodes instead, because a half-stripped file is not an acceptable answer to
+  /// `stripMetadata: true`.
   static func scrubbed(data: Data) -> Data? {
-    // The overrides below reach only the `kCGImageProperty…` channel. XMP is a second
-    // representation that can carry `exif:GPSLatitude`, `tiff:Make` and `tiff:Model`, and the two
-    // exclusion keys further down are documented for `CGImageDestinationCopyImageSource` rather
-    // than for the `AddImageFromSource` call used here — so a source carrying a packet is
-    // declined outright and re-encoded by the caller instead. The re-encode is the deliberate
-    // price of a guarantee that does not rest on undocumented behaviour, and it fires only for
-    // the minority of assets that went through an XMP-writing pipeline.
+    // The exclusion keys below reach only what ImageIO chooses to rewrite. XMP is a second
+    // representation that can carry `exif:GPSLatitude`, `tiff:Make` and `tiff:Model`, and a source
+    // already carrying a packet was measured to keep it — so such a source is declined outright
+    // and re-encoded by the caller instead. This gate reads raw bytes and depends on nothing
+    // ImageIO does, which is why it comes first.
     guard !XMPPacket.isPresent(in: data) else { return nil }
 
+    // JPEG only. `CGImageDestinationCopyImageSource` is the one ImageIO call documented to copy
+    // the image data unmodified, and it was measured to strip completely only for JPEG: on PNG it
+    // leaves every `tEXt` credit in place and *adds* an XMP packet rebuilt from them, and on HEIC
+    // it keeps Artist, Copyright, DateTime, Software, the IPTC by-line and the XMP. Those two go
+    // to the caller's re-encode, which was measured clean.
     guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-      let type = CGImageSourceGetType(source)
+      let type = CGImageSourceGetType(source),
+      UTType(type as String)?.conforms(to: .jpeg) == true
     else { return nil }
 
     let output = NSMutableData()
@@ -37,49 +30,33 @@ enum MetadataScrubber {
       return nil
     }
 
+    // The orientation must survive: dropping it would render a quarter-turned photo sideways, and
+    // the reported `width`/`height` assume it intact. `kCGImageDestinationMetadata` *replaces*
+    // every EXIF/IPTC/XMP tag unless `kCGImageDestinationMergeMetadata` is set, so an
+    // orientation-only object — and no merge flag — is what strips the rest. Merging is what an
+    // earlier implementation did through a partial TIFF dictionary, and it left Make, Model,
+    // Software, DateTime, Artist and Copyright in the file.
     let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] ?? [:]
-
-    // The orientation lives in the TIFF dictionary and must survive: dropping it would render
-    // a quarter-turned photo sideways. So TIFF is replaced by an orientation-only dictionary
-    // rather than removed, while Make and Model go with the rest.
-    var tiff: [CFString: Any] = [:]
+    let metadata = CGImageMetadataCreateMutable()
     if let orientation = properties[kCGImagePropertyOrientation] {
-      tiff[kCGImagePropertyTIFFOrientation] = orientation
+      guard
+        CGImageMetadataSetValueMatchingImageProperty(
+          metadata,
+          kCGImagePropertyTIFFDictionary,
+          kCGImagePropertyTIFFOrientation,
+          orientation as CFTypeRef
+        )
+      else { return nil }
     }
 
-    // The same treatment for PNG: nulling that dictionary wholesale would take gAMA and cHRM with
-    // it, shifting the colours of a PNG that carries no ICC profile, and could drop an indexed
-    // image's tRNS alpha. Only the rendering keys are carried over; Author, Comment, Software and
-    // the other `tEXt` credits are left behind.
-    var png: [CFString: Any] = [:]
-    if let sourcePNG = properties[kCGImagePropertyPNGDictionary] as? [CFString: Any] {
-      for key in renderingPNGKeys {
-        if let value = sourcePNG[key] {
-          png[key] = value
-        }
-      }
-    }
-
-    var overrides: [CFString: Any] = [
-      kCGImagePropertyExifDictionary: kCFNull,
-      kCGImagePropertyGPSDictionary: kCFNull,
-      kCGImagePropertyIPTCDictionary: kCFNull,
-      kCGImagePropertyExifAuxDictionary: kCFNull,
-      kCGImagePropertyMakerAppleDictionary: kCFNull,
-      kCGImagePropertyTIFFDictionary: tiff.isEmpty ? kCFNull : tiff,
-      kCGImagePropertyPNGDictionary: png.isEmpty ? kCFNull : png,
+    let options: [CFString: Any] = [
+      kCGImageDestinationMetadata: metadata,
+      kCGImageMetadataShouldExcludeXMP: kCFBooleanTrue as Any,
+      kCGImageMetadataShouldExcludeGPS: kCFBooleanTrue as Any,
     ]
 
-    // Belt and braces alongside the packet gate above: if ImageIO honours these on this call the
-    // XMP never reaches the destination, and if it ignores them nothing is lost. They can only
-    // ever subtract metadata. An empty `kCGImageDestinationMetadata` is deliberately not used —
-    // it is documented to replace all EXIF and TIFF tags, which would take the orientation above
-    // with it.
-    overrides[kCGImageMetadataShouldExcludeXMP] = kCFBooleanTrue
-    overrides[kCGImageMetadataShouldExcludeGPS] = kCFBooleanTrue
-
-    CGImageDestinationAddImageFromSource(destination, source, 0, overrides as CFDictionary)
-    guard CGImageDestinationFinalize(destination) else { return nil }
+    guard CGImageDestinationCopyImageSource(destination, source, options as CFDictionary, nil)
+    else { return nil }
     return output as Data
   }
 }
