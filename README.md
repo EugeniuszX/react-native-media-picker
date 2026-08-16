@@ -288,11 +288,12 @@ on iOS" note in the [`CameraOptions`](#cameraoptions) table.
 knowing, because only one of them is free:
 
 - **Rewriting the container in place.** The already-compressed pixel data is
-  copied across untouched, so nothing is decoded and the pixels come back
-  exactly as the source encoded them. The file gets slightly smaller. What it is
-  not is a byte copy of the whole file: on iOS the rewrite carries **one** image
-  across, so an HDR gain map, a depth map or a second animation frame stored
-  beside the main image does not survive it — see the note below the table.
+  copied across untouched, so nothing is decoded and no quality is lost — on iOS
+  this was measured: the scrubbed JPEG's quantisation tables are byte-identical
+  to the source's and its entropy-coded scan is byte-identical too, so **not one
+  pixel changes**. The file gets slightly smaller, by roughly the size of the
+  metadata that was removed. Auxiliary images stored beside the main one — an
+  HDR gain map, a depth map — are carried across intact.
 - **Re-encoding.** Used where the container cannot be rewritten. The image is
   decoded and written afresh, so `fileSize` changes, `type` and `fileName` can
   change with it, and the pixels are no longer the source's.
@@ -308,8 +309,8 @@ were handed.
 | Source | iOS | Android |
 |---|---|---|
 | JPEG | rewritten in place | rewritten in place |
-| PNG | rewritten in place | rewritten in place |
-| HEIC | rewritten in place, stays `image/heic` | **re-encoded to `image/jpeg`** |
+| PNG | **re-encoded**, stays `image/png` | rewritten in place |
+| HEIC | **re-encoded**, stays `image/heic` | **re-encoded to `image/jpeg`** |
 | WebP, static | **re-encoded to `image/jpeg`** (no WebP encoder on iOS) | rewritten in place |
 | WebP, animated | **passthrough — not honoured** | rewritten in place, frames intact |
 | GIF (animated or not) | **no-op** | **no-op** |
@@ -332,45 +333,41 @@ WebP takes the re-encode instead and does honour the option, coming back as
 **A HEIC changes container on Android.** `ExifInterface` can read HEIC but not
 write it, so a strip means a re-encode to JPEG: `type` becomes `image/jpeg`,
 `fileName`'s extension follows, and `fileSize` moves. On iOS the same photo is
-scrubbed in place and stays `image/heic`. This mirrors what a resize already
-does to a HEIC on Android — see [Format handling](#format-handling).
+re-encoded too but stays `image/heic`, so `type` and `fileName` do not move —
+`fileSize` and the pixels do. This mirrors what a resize already does to a HEIC
+on Android — see [Format handling](#format-handling).
 
-**An in-place rewrite on iOS carries one image, not the whole file.** iOS
-rewrites the container by copying the primary image's compressed data into a
-fresh file sized for a single image. The pixels of that image are the source's,
-untouched — but anything stored *alongside* it is left behind. Two consequences,
-both reachable from a plain `stripMetadata: true` with `format: 'original'` and
-no resize:
+**On iOS only a JPEG is rewritten in place; a PNG and a HEIC are re-encoded.**
+This is narrower than it looks like it should be, and it is a measured result
+rather than a policy. The one ImageIO call that copies the compressed data
+unmodified strips a JPEG completely, but on a PNG it leaves every `tEXt` credit
+where it is and *adds* an XMP packet rebuilt out of them, and on a HEIC it keeps
+Artist, Copyright, DateTime, Software and the XMP. Neither is an acceptable
+answer to `stripMetadata: true`, so both fall through to the re-encode, which
+comes back clean. A PNG re-encode is not a quality loss in the JPEG sense — PNG
+is lossless — but it does pass the image through an 8-bit sRGB context, so a
+16-bit or wide-gamut PNG is converted. A HEIC re-encode is lossy and respects
+the `quality` you set.
 
-- **The HDR gain map and the depth map go.** A modern iPhone photo carries its
-  gain map, and a portrait shot its depth map, as auxiliary images beside the
-  main one. A scrubbed JPEG or HEIC comes back without them: the photo renders
-  as ordinary SDR, and anything that reads depth finds nothing. Losing the
-  metadata is what was asked for; losing the HDR is not, and there is no option
-  today that strips one without the other. Without `stripMetadata`, and with no
-  resize asked for, the file is passed through untouched and keeps both.
-- **An APNG is flattened to its first frame.** iOS treats an APNG as a still
-  PNG — the animation check covers GIF and animated WebP only — so the `PNG`
-  row above applies to it and the rewrite keeps image zero alone. The animation
-  is lost, and nothing in the result says so. Without `stripMetadata` an APNG is
-  returned untouched and keeps every frame; asking for a resize flattens it too,
-  since a resize decodes a single frame and encodes that. This is a known
-  limitation rather than a decision — the fix belongs in the shared format
-  detection and is not in this release.
-
-Android's rewrite works the other way round: it replaces the EXIF segment and
-copies the rest of the container across, rather than assembling a new file out
-of one image, so an APNG keeps its frames there.
+**An APNG asked to strip is flattened to its first frame on iOS.** iOS treats an
+APNG as a still PNG — the animation check covers GIF and animated WebP only — so
+the `PNG` row above applies to it, and that row is now a re-encode, which encodes
+the single frame it decoded. The animation is lost, and nothing in the result
+says so. Without `stripMetadata` an APNG is returned untouched and keeps every
+frame; asking for a resize flattens it too, for the same reason. This is a known
+limitation rather than a decision — the fix belongs in the shared format
+detection and is not in this release. Android's rewrite works the other way
+round: it replaces the EXIF segment and copies the rest of the container across,
+so an APNG keeps its frames there.
 
 **A source carrying an XMP packet is re-encoded rather than rewritten.** XMP is
 a second, parallel copy of the metadata — it can hold `exif:GPSLatitude` and
-`tiff:Model` of its own — and neither platform's in-place writer can remove it:
-ImageIO's XMP exclusion keys are documented for a different call than the one
-iOS uses to copy the image across, and Android's `saveAttributes` replaces only
-the EXIF segment and copies every other one verbatim. Rather than rest the
-guarantee on undocumented behaviour, both platforms decline the rewrite and
-re-encode. Photos that went through Lightroom, Google Photos or a similar
-pipeline commonly carry a packet. The consequence is worth stating plainly: **a JPEG
+`tiff:Model` of its own — and neither platform's in-place writer removes it
+reliably: on iOS a source that already carries a packet was measured to keep it,
+and Android's `saveAttributes` replaces only the EXIF segment and copies every
+other one verbatim. Rather than rest the guarantee on that, both platforms
+decline the rewrite and re-encode. Photos that went through Lightroom, Google
+Photos or a similar pipeline commonly carry a packet. The consequence is worth stating plainly: **a JPEG
 asked for with `format: 'original'` and no resize comes back materially larger**
 than the untouched passthrough the caller expected. At the default `quality: 1`
 nothing is thrown away, which is exactly why the file grows. A `quality` you set
@@ -384,8 +381,9 @@ and PNG text chunks (`tEXt`/`zTXt`/`iTXt` — Author, Comment, Software). A sour
 carrying either is re-encoded, same as an XMP one, and comes back a different
 size — usually larger, but a PNG re-encoded because of a `tEXt` chunk goes back
 out as PNG at Android's own deflate settings and can land either side of the
-source. On iOS those two channels are removed in place by the writer itself, so
-a JPEG with IPTC or a PNG with text chunks is still scrubbed losslessly there.
+source. On iOS a JPEG carrying an IPTC block is still scrubbed losslessly — the
+block is removed by the in-place rewrite along with everything else. A PNG with
+text chunks is re-encoded on iOS too, for the reason given above.
 
 The one place that leaves an asset with nowhere to go is an **animated WebP on
 Android that also carries residue**: it cannot be scrubbed cleanly and it cannot
@@ -396,9 +394,10 @@ WebP.
 **JPEG `COM` comment segments survive a scrub on Android.** A `COM` segment has
 no identifier to detect and no defined semantics; in practice it holds encoder
 signatures (`"Created with GIMP"` and the like) rather than anything about the
-photographer. A `COM` has no representation in the properties dictionary iOS
-rewrites the container from, so it should not survive there — but that is the
-mechanism talking, not a check the library performs.
+photographer. On iOS a `COM` is **removed** — measured on a JPEG with one
+injected after the `SOI`, which came back without it and byte-for-byte the same
+size as the same JPEG scrubbed without one. That is the writer's doing rather
+than a check the library performs, so it is a measurement, not a guarantee.
 
 **And a scrub can leave IFD1 behind on Android.** `ExifInterface` skips the
 thumbnail IFD when the file reports no thumbnail, while its writer emits every
@@ -558,8 +557,10 @@ here and surfaces as `errorCode: 'camera_unavailable'` from `launchCamera`.
   `ErrorCode = 'permission' | 'camera_unavailable' | 'busy' | 'others'`,
   exported from the package:
   - `'permission'` — camera permission denied or restricted
-  - `'camera_unavailable'` — the device has no camera, or (Android) no installed
-    app can handle the capture intent
+  - `'camera_unavailable'` — the device has no camera; or (iOS) it has one that
+    cannot record movies and `mediaType: 'video'` was asked for, which is what
+    the simulator reports; or (Android) no installed app can handle the capture
+    intent
   - `'busy'` — **another pick from this library is already in flight**, and
     nothing else
   - `'others'` — everything else (no activity or view controller to present from,
