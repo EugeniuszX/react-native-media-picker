@@ -9,8 +9,8 @@ internal object MetadataScrubber {
    * The only tag that survives a strip. Dropping [ExifInterface.TAG_ORIENTATION] would render a
    * quarter-turned photo sideways, and the reported width/height already assume it survives.
    *
-   * iOS keeps exactly this one value too: `ios/MetadataScrubber.swift` nulls the whole TIFF
-   * dictionary and rebuilds it from the orientation alone.
+   * iOS keeps exactly this one value too, by a different mechanism: `ios/MetadataScrubber.swift`
+   * replaces the file's entire metadata with an orientation-only `CGImageMetadata` object.
    */
   val SURVIVING_TAGS = setOf(ExifInterface.TAG_ORIENTATION)
 
