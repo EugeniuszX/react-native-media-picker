@@ -6,4 +6,24 @@ require "#{ws_dir}/node_modules/react-native-test-app/test_app.rb"
 
 workspace 'ReactNativeMediaPickerExample.xcworkspace'
 
-use_test_app! :hermes_enabled => true, :fabric_enabled => true
+# react-native-test-app 5.1.11 generates `Info.plist` from its own template and its app.json
+# schema has no `ios.infoPlist` key — nothing reads the block, so the usage strings this example
+# needs never reached the built app: it shipped with the template's QR-scanner camera string and
+# no microphone key at all. Merge the block in after generation. The generated plist is rewritten
+# on every `pod install`, so this has to run every time rather than being checked in. It goes
+# through `use_test_app!`'s own `:post_install` option because CocoaPods allows only one
+# `post_install` hook and react-native-test-app already registers it.
+merge_info_plist = lambda do |_installer|
+  require 'json'
+  overrides = JSON.parse(File.read(File.join(__dir__, '..', 'app.json'))).dig('ios', 'infoPlist')
+  next if overrides.nil? || overrides.empty?
+
+  plist_path = File.join(__dir__, '..', 'node_modules', '.generated', 'ios', 'Info.plist')
+  plist = Xcodeproj::Plist.read_from_path(plist_path)
+  Xcodeproj::Plist.write_to_path(plist.merge(overrides), plist_path)
+  Pod::UI.puts "Merged #{overrides.keys.join(', ')} from app.json into Info.plist"
+end
+
+use_test_app! :hermes_enabled => true,
+              :fabric_enabled => true,
+              :post_install => merge_info_plist
