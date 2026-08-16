@@ -296,12 +296,19 @@ knowing, because only one of them is free:
   HDR gain map, a depth map — are carried across intact.
 - **Re-encoding.** Used where the container cannot be rewritten. The image is
   decoded and written afresh, so `fileSize` changes, `type` and `fileName` can
-  change with it, and the pixels are no longer the source's.
+  change with it, and the pixels are no longer the source's. It also writes one
+  image and nothing else: **auxiliary images stored beside the main one — an HDR
+  gain map, a depth map — are lost.** On iOS that lands squarely on HEIC, which
+  is the default iPhone capture format, so `stripMetadata: true` on a photo
+  straight out of the camera comes back flat, without its HDR gain map and
+  without its depth map. Nothing in the result says so.
 
 The photo's **rendered orientation** survives either route, though by different
 means. The in-place rewrite keeps the EXIF orientation tag — dropping it would
 render a quarter-turned photo sideways, and the reported `width`/`height` already
-assume it is there. The re-encode bakes the rotation into the pixels instead and
+assume it is there. A source carrying no orientation tag comes back with an
+explicit `Orientation = 1`, which is what its absence already meant. The
+re-encode bakes the rotation into the pixels instead and
 writes a file with no EXIF at all, so there is no orientation tag left to read
 back; the image is simply upright. Either way `width`/`height` describe what you
 were handed.
@@ -310,7 +317,7 @@ were handed.
 |---|---|---|
 | JPEG | rewritten in place | rewritten in place |
 | PNG | **re-encoded**, stays `image/png` | rewritten in place |
-| HEIC | **re-encoded**, stays `image/heic` | **re-encoded to `image/jpeg`** |
+| HEIC | **re-encoded**, stays `image/heic` (`image/jpeg` where there is no HEIC encoder) | **re-encoded to `image/jpeg`** |
 | WebP, static | **re-encoded to `image/jpeg`** (no WebP encoder on iOS) | rewritten in place |
 | WebP, animated | **passthrough — not honoured** | rewritten in place, frames intact |
 | GIF (animated or not) | **no-op** | **no-op** |
@@ -333,9 +340,14 @@ WebP takes the re-encode instead and does honour the option, coming back as
 **A HEIC changes container on Android.** `ExifInterface` can read HEIC but not
 write it, so a strip means a re-encode to JPEG: `type` becomes `image/jpeg`,
 `fileName`'s extension follows, and `fileSize` moves. On iOS the same photo is
-re-encoded too but stays `image/heic`, so `type` and `fileName` do not move —
-`fileSize` and the pixels do. This mirrors what a resize already does to a HEIC
-on Android — see [Format handling](#format-handling).
+re-encoded too and normally stays `image/heic`, so `type` and `fileName` do not
+move — `fileSize` and the pixels do. This mirrors what a resize already does to a
+HEIC on Android — see [Format handling](#format-handling). The exception is a
+device with no HEIC encoder — the iOS Simulator, and older hardware: there the
+encoder falls back to JPEG without announcing it, so `type` becomes `image/jpeg`
+and `fileName`'s extension follows after all. It is the same fallback
+[Format handling](#format-handling) describes for a resize, and it applies for
+the same reason: a file in the wrong container beats no strip at all.
 
 **On iOS only a JPEG is rewritten in place; a PNG and a HEIC are re-encoded.**
 This is narrower than it looks like it should be, and it is a measured result
@@ -343,8 +355,12 @@ rather than a policy. The one ImageIO call that copies the compressed data
 unmodified strips a JPEG completely, but on a PNG it leaves every `tEXt` credit
 where it is and *adds* an XMP packet rebuilt out of them, and on a HEIC it keeps
 Artist, Copyright, DateTime, Software and the XMP. Neither is an acceptable
-answer to `stripMetadata: true`, so both fall through to the re-encode, which
-comes back clean. A PNG re-encode is not a quality loss in the JPEG sense — PNG
+answer to `stripMetadata: true`, so both fall through to the re-encode. That
+re-encode is clean by construction rather than by measurement: it hands a freshly
+decoded bitmap to `UIImage.pngData()` or to an ImageIO HEIC destination with no
+metadata attached, so there is no source container left for a tag to come out of.
+The re-encode that was *measured* clean was a JPEG, written by a third writer
+(`jpegData`). A PNG re-encode is not a quality loss in the JPEG sense — PNG
 is lossless — but it does pass the image through an 8-bit sRGB context, so a
 16-bit or wide-gamut PNG is converted. A HEIC re-encode is lossy and respects
 the `quality` you set.
@@ -381,9 +397,15 @@ and PNG text chunks (`tEXt`/`zTXt`/`iTXt` — Author, Comment, Software). A sour
 carrying either is re-encoded, same as an XMP one, and comes back a different
 size — usually larger, but a PNG re-encoded because of a `tEXt` chunk goes back
 out as PNG at Android's own deflate settings and can land either side of the
-source. On iOS a JPEG carrying an IPTC block is still scrubbed losslessly — the
-block is removed by the in-place rewrite along with everything else. A PNG with
-text chunks is re-encoded on iOS too, for the reason given above.
+source. On iOS a JPEG carrying an IPTC block is still scrubbed losslessly, and
+that one is measured: on a JPEG with a ten-dataset Photoshop `APP13` — by-line,
+by-line title, city, country, headline, credit, caption, copyright — every
+dataset is gone from the output, while the quantisation tables, Huffman tables
+and entropy-coded scan come back byte-identical and 0 of 921 600 samples change.
+What survives is an empty
+`8BIM` `0x0404` resource: a 14-byte shell with a zero-length payload, carrying
+nothing from the source. A PNG with text chunks is re-encoded on iOS too, for the
+reason given above.
 
 The one place that leaves an asset with nowhere to go is an **animated WebP on
 Android that also carries residue**: it cannot be scrubbed cleanly and it cannot
