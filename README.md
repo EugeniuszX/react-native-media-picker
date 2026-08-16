@@ -13,7 +13,7 @@ Gallery access requires **no runtime permissions** on iOS (PHPicker) or Android
 
 ## Comparison
 
-| | this library | react-native-image-picker | expo-image-picker |
+| | @eugeniuszx/react-native-media-picker | react-native-image-picker | expo-image-picker |
 |---|---|---|---|
 | Gallery runtime permission | None (PHPicker / Photo Picker) | None (PHPicker / Photo Picker), but `includeExtra` (EXIF) "requires library permissions" | None to launch, but its config plugin adds `NSPhotoLibraryUsageDescription` and Android `READ_EXTERNAL_STORAGE`/`WRITE_EXTERNAL_STORAGE` by default |
 | New Architecture | Required — TurboModule only, RN 0.76+ | Supported, with a legacy-architecture fallback | Supported (Expo SDK 53+; SDK 55+ is New Architecture only) |
