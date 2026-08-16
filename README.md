@@ -288,8 +288,11 @@ on iOS" note in the [`CameraOptions`](#cameraoptions) table.
 knowing, because only one of them is free:
 
 - **Rewriting the container in place.** The already-compressed pixel data is
-  copied across untouched, so nothing is decoded and no quality is lost. The
-  file gets slightly smaller and everything else about it stays put.
+  copied across untouched, so nothing is decoded and the pixels come back
+  exactly as the source encoded them. The file gets slightly smaller. What it is
+  not is a byte copy of the whole file: on iOS the rewrite carries **one** image
+  across, so an HDR gain map, a depth map or a second animation frame stored
+  beside the main image does not survive it — see the note below the table.
 - **Re-encoding.** Used where the container cannot be rewritten. The image is
   decoded and written afresh, so `fileSize` changes, `type` and `fileName` can
   change with it, and the pixels are no longer the source's.
@@ -331,6 +334,33 @@ write it, so a strip means a re-encode to JPEG: `type` becomes `image/jpeg`,
 `fileName`'s extension follows, and `fileSize` moves. On iOS the same photo is
 scrubbed in place and stays `image/heic`. This mirrors what a resize already
 does to a HEIC on Android — see [Format handling](#format-handling).
+
+**An in-place rewrite on iOS carries one image, not the whole file.** iOS
+rewrites the container by copying the primary image's compressed data into a
+fresh file sized for a single image. The pixels of that image are the source's,
+untouched — but anything stored *alongside* it is left behind. Two consequences,
+both reachable from a plain `stripMetadata: true` with `format: 'original'` and
+no resize:
+
+- **The HDR gain map and the depth map go.** A modern iPhone photo carries its
+  gain map, and a portrait shot its depth map, as auxiliary images beside the
+  main one. A scrubbed JPEG or HEIC comes back without them: the photo renders
+  as ordinary SDR, and anything that reads depth finds nothing. Losing the
+  metadata is what was asked for; losing the HDR is not, and there is no option
+  today that strips one without the other. Without `stripMetadata`, and with no
+  resize asked for, the file is passed through untouched and keeps both.
+- **An APNG is flattened to its first frame.** iOS treats an APNG as a still
+  PNG — the animation check covers GIF and animated WebP only — so the `PNG`
+  row above applies to it and the rewrite keeps image zero alone. The animation
+  is lost, and nothing in the result says so. Without `stripMetadata` an APNG is
+  returned untouched and keeps every frame; asking for a resize flattens it too,
+  since a resize decodes a single frame and encodes that. This is a known
+  limitation rather than a decision — the fix belongs in the shared format
+  detection and is not in this release.
+
+Android's rewrite works the other way round: it replaces the EXIF segment and
+copies the rest of the container across, rather than assembling a new file out
+of one image, so an APNG keeps its frames there.
 
 **A source carrying an XMP packet is re-encoded rather than rewritten.** XMP is
 a second, parallel copy of the metadata — it can hold `exif:GPSLatitude` and
