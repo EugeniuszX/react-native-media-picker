@@ -1,6 +1,20 @@
 import type { TurboModule } from 'react-native';
 import { TurboModuleRegistry } from 'react-native';
 
+export type Exif = {
+  dateTimeOriginal?: string;
+  latitude?: number;
+  longitude?: number;
+  altitude?: number;
+  make?: string;
+  model?: string;
+  orientation?: number;
+  iso?: number;
+  fNumber?: number;
+  exposureTime?: number;
+  focalLength?: number;
+};
+
 export type Asset = {
   uri: string;
   type: string;
@@ -13,11 +27,12 @@ export type Asset = {
   thumbnailUri?: string;
   thumbnailWidth?: number;
   thumbnailHeight?: number;
+  exif?: Exif;
 };
 
-export type ErrorCode = 'permission' | 'camera_unavailable' | 'others';
+export type ErrorCode = 'permission' | 'camera_unavailable' | 'busy' | 'others';
 
-export type PickerResponse = {
+export type NativePickerResponse = {
   didCancel: boolean;
   errorCode?: ErrorCode;
   errorMessage?: string;
@@ -33,20 +48,30 @@ export type NativeLibraryOptions = {
   format: string;
   mediaType: string;
   includeThumbnail: boolean;
+  includeExif: boolean;
+  stripMetadata: boolean;
 };
 
 export type NativeCameraOptions = {
   cameraType: string;
+  mediaType: string;
   maxWidth: number;
   maxHeight: number;
   quality: number;
   includeBase64: boolean;
   format: string;
+  maxDuration: number;
+  videoQuality: string;
+  includeThumbnail: boolean;
+  includeExif: boolean;
+  stripMetadata: boolean;
 };
 
 export interface Spec extends TurboModule {
-  launchImageLibrary(options: NativeLibraryOptions): Promise<PickerResponse>;
-  launchCamera(options: NativeCameraOptions): Promise<PickerResponse>;
+  launchImageLibrary(
+    options: NativeLibraryOptions
+  ): Promise<NativePickerResponse>;
+  launchCamera(options: NativeCameraOptions): Promise<NativePickerResponse>;
   cleanTempFiles(): Promise<number>;
   releaseAssets(uris: Array<string>): Promise<number>;
   getCameraPermissionStatus(): Promise<string>;

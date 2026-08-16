@@ -35,7 +35,8 @@
   "ios": {
     "bundleIdentifier": "eugeniuszx.reactnativemediapicker.example",
     "infoPlist": {
-      "NSCameraUsageDescription": "Take photos to attach"
+      "NSCameraUsageDescription": "Take photos to attach",
+      "NSMicrophoneUsageDescription": "Record audio with your videos"
     }
   }
 }

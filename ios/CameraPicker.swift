@@ -1,5 +1,6 @@
 import AVFoundation
 import UIKit
+import UniformTypeIdentifiers
 
 final class CameraPicker: NSObject, UIImagePickerControllerDelegate,
   UINavigationControllerDelegate
@@ -8,6 +9,7 @@ final class CameraPicker: NSObject, UIImagePickerControllerDelegate,
 
   private let options: CameraOptions
   private let processor: ImageProcessor
+  private let videoProcessor: VideoProcessor
   private let finish: ([AssetPayload]?, Bool, PickerError?, String?) -> Void
   /// Kept alive until completion — taken before the permission prompt, not after.
   private var selfReference: CameraPicker?
@@ -15,16 +17,24 @@ final class CameraPicker: NSObject, UIImagePickerControllerDelegate,
   init(
     options: CameraOptions,
     processor: ImageProcessor,
+    videoProcessor: VideoProcessor,
     finish: @escaping ([AssetPayload]?, Bool, PickerError?, String?) -> Void
   ) {
     self.options = options
     self.processor = processor
+    self.videoProcessor = videoProcessor
     self.finish = finish
     super.init()
   }
 
   func start() -> Bool {
     guard UIImagePickerController.isSourceTypeAvailable(.camera) else { return false }
+    if options.mediaType == .video,
+      UIImagePickerController.availableMediaTypes(for: .camera)?
+        .contains(UTType.movie.identifier) != true
+    {
+      return false
+    }
 
     selfReference = self
 
@@ -61,12 +71,29 @@ final class CameraPicker: NSObject, UIImagePickerControllerDelegate,
       let picker = UIImagePickerController()
       picker.sourceType = .camera
       picker.delegate = self
+      if options.mediaType == .video {
+        picker.mediaTypes = [UTType.movie.identifier]
+        picker.videoQuality = Self.quality(for: options.videoQuality)
+        if options.maxDuration > 0 {
+          picker.videoMaximumDuration = TimeInterval(options.maxDuration)
+        }
+      }
       if options.facing == .front,
         UIImagePickerController.isCameraDeviceAvailable(.front)
       {
         picker.cameraDevice = .front
       }
       presenter.present(picker, animated: true)
+    }
+  }
+
+  private static func quality(
+    for quality: VideoQuality
+  ) -> UIImagePickerController.QualityType {
+    switch quality {
+    case .low: return .typeLow
+    case .medium: return .typeMedium
+    case .high: return .typeHigh
     }
   }
 
@@ -78,6 +105,31 @@ final class CameraPicker: NSObject, UIImagePickerControllerDelegate,
     dismissed.enter()
     picker.dismiss(animated: true) { dismissed.leave() }
 
+    if options.mediaType == .video {
+      guard let url = info[.mediaURL] as? URL else {
+        DispatchQueue.global(qos: .userInitiated).async { [self] in
+          _ = dismissed.wait(timeout: .now() + Self.dismissalTimeout)
+          complete(nil, false, .others, "Failed to record video")
+        }
+        return
+      }
+      DispatchQueue.global(qos: .userInitiated).async { [self] in
+        let payload = videoProcessor.process(
+          sourceURL: url,
+          uti: UTType.quickTimeMovie.identifier,
+          includeThumbnail: options.includeThumbnail
+        )
+        try? FileManager.default.removeItem(at: url)
+        _ = dismissed.wait(timeout: .now() + Self.dismissalTimeout)
+        guard let payload else {
+          complete(nil, false, .others, "Failed to record video")
+          return
+        }
+        complete([payload], false, nil, nil)
+      }
+      return
+    }
+
     guard let image = info[.originalImage] as? UIImage else {
       DispatchQueue.global(qos: .userInitiated).async { [self] in
         _ = dismissed.wait(timeout: .now() + Self.dismissalTimeout)
@@ -86,13 +138,19 @@ final class CameraPicker: NSObject, UIImagePickerControllerDelegate,
       return
     }
     DispatchQueue.global(qos: .userInitiated).async { [self] in
+      let exif =
+        options.includeExif
+        ? ExifReader.read(
+          properties: info[.mediaMetadata] as? [CFString: Any])
+        : nil
       let payload = processor.process(
         capturedImage: image,
         requested: options.format,
         maxWidth: options.maxWidth,
         maxHeight: options.maxHeight,
         quality: options.quality,
-        includeBase64: options.includeBase64
+        includeBase64: options.includeBase64,
+        exif: exif
       )
       _ = dismissed.wait(timeout: .now() + Self.dismissalTimeout)
       guard let payload else {

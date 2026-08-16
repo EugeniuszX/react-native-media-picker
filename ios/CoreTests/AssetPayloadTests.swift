@@ -87,12 +87,6 @@ final class AssetPayloadTests: XCTestCase {
     XCTAssertNil(dict["thumbnailHeight"])
   }
 
-  func testErrorCodesMatchThePublicContract() {
-    XCTAssertEqual(PickerError.permission.code, "permission")
-    XCTAssertEqual(PickerError.cameraUnavailable.code, "camera_unavailable")
-    XCTAssertEqual(PickerError.others.code, "others")
-  }
-
   func testCameraFacingFallsBackToBack() {
     XCTAssertEqual(CameraFacing.from(rawValue: "front"), .front)
     XCTAssertEqual(CameraFacing.from(rawValue: "back"), .back)

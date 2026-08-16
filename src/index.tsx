@@ -1,12 +1,37 @@
 import NativeMediaPicker, {
   type Asset,
   type ErrorCode,
+  type Exif,
   type NativeCameraOptions,
   type NativeLibraryOptions,
-  type PickerResponse,
 } from './NativeReactNativeMediaPicker';
 
-export type { Asset, ErrorCode, PickerResponse };
+export type { Asset, ErrorCode, Exif };
+
+/**
+ * Every member spells out the other members' fields as `?: undefined`, so reading
+ * `response.assets` on an un-narrowed value still compiles exactly as it did in 1.4.x,
+ * while `if (didCancel) … if (errorCode) …` now narrows `assets` to `Asset[]`.
+ */
+export type PickerResponse =
+  | {
+      didCancel: true;
+      assets?: undefined;
+      errorCode?: undefined;
+      errorMessage?: undefined;
+    }
+  | {
+      didCancel: false;
+      assets: Asset[];
+      errorCode?: undefined;
+      errorMessage?: undefined;
+    }
+  | {
+      didCancel: false;
+      assets?: undefined;
+      errorCode: ErrorCode;
+      errorMessage: string;
+    };
 
 export type OutputFormat = 'original' | 'jpeg' | 'png';
 
@@ -21,17 +46,29 @@ export interface LibraryOptions {
   format?: OutputFormat;
   mediaType?: MediaType;
   includeThumbnail?: boolean;
+  includeExif?: boolean;
+  stripMetadata?: boolean;
 }
 
 export type CameraType = 'back' | 'front';
 
+export type CameraMediaType = 'photo' | 'video';
+
+export type VideoQuality = 'low' | 'medium' | 'high';
+
 export interface CameraOptions {
   cameraType?: CameraType;
+  mediaType?: CameraMediaType;
   maxWidth?: number;
   maxHeight?: number;
   quality?: number;
   includeBase64?: boolean;
   format?: OutputFormat;
+  maxDuration?: number;
+  videoQuality?: VideoQuality;
+  includeThumbnail?: boolean;
+  includeExif?: boolean;
+  stripMetadata?: boolean;
 }
 
 const VALID_CAMERA_TYPES: ReadonlyArray<CameraType> = ['back', 'front'];
@@ -39,6 +76,17 @@ const VALID_CAMERA_TYPES: ReadonlyArray<CameraType> = ['back', 'front'];
 const VALID_FORMATS: ReadonlyArray<OutputFormat> = ['original', 'jpeg', 'png'];
 
 const VALID_MEDIA_TYPES: ReadonlyArray<MediaType> = ['photo', 'video', 'mixed'];
+
+const VALID_CAMERA_MEDIA_TYPES: ReadonlyArray<CameraMediaType> = [
+  'photo',
+  'video',
+];
+
+const VALID_VIDEO_QUALITIES: ReadonlyArray<VideoQuality> = [
+  'low',
+  'medium',
+  'high',
+];
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), max);
@@ -62,12 +110,16 @@ export const normalizeLibraryOptions = (
   format: normalizeFormat(options.format),
   mediaType: normalizeMediaType(options.mediaType),
   includeThumbnail: options.includeThumbnail ?? false,
+  includeExif: options.includeExif ?? false,
+  stripMetadata: options.stripMetadata ?? false,
 });
 
 export const launchImageLibrary = (
   options: LibraryOptions = {}
 ): Promise<PickerResponse> =>
-  NativeMediaPicker.launchImageLibrary(normalizeLibraryOptions(options));
+  NativeMediaPicker.launchImageLibrary(
+    normalizeLibraryOptions(options)
+  ) as Promise<PickerResponse>;
 
 export const normalizeCameraOptions = (
   options: CameraOptions
@@ -77,20 +129,38 @@ export const normalizeCameraOptions = (
       ? options.cameraType
       : 'back';
 
+  const mediaType =
+    options.mediaType && VALID_CAMERA_MEDIA_TYPES.includes(options.mediaType)
+      ? options.mediaType
+      : 'photo';
+
+  const videoQuality =
+    options.videoQuality && VALID_VIDEO_QUALITIES.includes(options.videoQuality)
+      ? options.videoQuality
+      : 'high';
+
   return {
     cameraType,
+    mediaType,
     maxWidth: Math.trunc(clampMin0(options.maxWidth ?? 0)),
     maxHeight: Math.trunc(clampMin0(options.maxHeight ?? 0)),
     quality: clamp(options.quality ?? 1, 0, 1),
     includeBase64: options.includeBase64 ?? false,
     format: normalizeFormat(options.format),
+    maxDuration: Math.trunc(clampMin0(options.maxDuration ?? 0)),
+    videoQuality,
+    includeThumbnail: options.includeThumbnail ?? false,
+    includeExif: options.includeExif ?? false,
+    stripMetadata: options.stripMetadata ?? false,
   };
 };
 
 export const launchCamera = (
   options: CameraOptions = {}
 ): Promise<PickerResponse> =>
-  NativeMediaPicker.launchCamera(normalizeCameraOptions(options));
+  NativeMediaPicker.launchCamera(
+    normalizeCameraOptions(options)
+  ) as Promise<PickerResponse>;
 
 /**
  * `'denied'` is only ever reported on Android — iOS gives an app one chance to ask, so a refusal

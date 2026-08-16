@@ -56,6 +56,15 @@ android {
     disable "GradleCompatible"
   }
 
+  testOptions {
+    unitTests {
+      // ExifInterface's static initialiser calls Log.isLoggable, which throws on the stub
+      // android.jar. MetadataScrubberTest has to load the class to enumerate its tag constants
+      // and prove the strip list is complete, so let the stubs return defaults instead.
+      returnDefaultValues = true
+    }
+  }
+
   compileOptions {
     sourceCompatibility JavaVersion.VERSION_17
     targetCompatibility JavaVersion.VERSION_17

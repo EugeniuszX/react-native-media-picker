@@ -18,9 +18,12 @@ struct ImageProcessor {
     maxHeight: Int,
     quality: Double,
     includeBase64: Bool,
+    stripMetadata: Bool = false,
+    includeExif: Bool = false,
     suggestedName: String? = nil
   ) -> AssetPayload? {
     let metadata = readMetadata(from: data)
+    let exif = includeExif ? ExifReader.read(from: data) : nil
     let isAnimated =
       format == .gif
       || (format == .webp && ImageFormat.isAnimatedWebP(header: data))
@@ -38,15 +41,30 @@ struct ImageProcessor {
       isAnimated: output.preserveAnimation
     )
 
-    guard plan.needsTransform || output.forceReencode else {
-      return write(
-        data: data,
+    let willTransform = plan.needsTransform || output.forceReencode
+    let action = MetadataPlan.resolve(
+      stripMetadata: stripMetadata,
+      willTransform: willTransform,
+      preserveSource: MetadataPlan.preservesSource(
         format: format,
-        width: plan.displayWidth,
-        height: plan.displayHeight,
-        includeBase64: includeBase64,
-        suggestedName: suggestedName
-      )
+        preserveAnimation: output.preserveAnimation
+      ),
+      canScrub: MetadataPlan.canScrub(format)
+    )
+
+    if !willTransform, action != .forceReencode {
+      let payloadData = action == .scrub ? MetadataScrubber.scrubbed(data: data) : data
+      if let payloadData {
+        return write(
+          data: payloadData,
+          format: format,
+          width: plan.displayWidth,
+          height: plan.displayHeight,
+          includeBase64: includeBase64,
+          suggestedName: suggestedName,
+          exif: exif
+        )
+      }
     }
 
     guard let image = UIImage(data: data) else { return nil }
@@ -59,7 +77,8 @@ struct ImageProcessor {
       format: output.target,
       quality: quality,
       includeBase64: includeBase64,
-      suggestedName: suggestedName
+      suggestedName: suggestedName,
+      exif: exif
     )
   }
 
@@ -69,7 +88,8 @@ struct ImageProcessor {
     maxWidth: Int,
     maxHeight: Int,
     quality: Double,
-    includeBase64: Bool
+    includeBase64: Bool,
+    exif: ExifPayload? = nil
   ) -> AssetPayload? {
     let pixelWidth = image.cgImage?.width ?? Int(image.size.width * image.scale)
     let pixelHeight = image.cgImage?.height ?? Int(image.size.height * image.scale)
@@ -94,7 +114,8 @@ struct ImageProcessor {
       resized,
       format: output.target,
       quality: quality,
-      includeBase64: includeBase64
+      includeBase64: includeBase64,
+      exif: exif
     )
   }
 
@@ -188,7 +209,8 @@ struct ImageProcessor {
     format: ImageFormat,
     quality: Double,
     includeBase64: Bool,
-    suggestedName: String? = nil
+    suggestedName: String? = nil,
+    exif: ExifPayload?
   ) -> AssetPayload? {
     guard let encoded = encode(image, format: format, quality: quality) else { return nil }
     let cgImage = image.cgImage
@@ -200,7 +222,8 @@ struct ImageProcessor {
       width: pixelWidth,
       height: pixelHeight,
       includeBase64: includeBase64,
-      suggestedName: suggestedName
+      suggestedName: suggestedName,
+      exif: exif
     )
   }
 
@@ -210,7 +233,8 @@ struct ImageProcessor {
     width: Int,
     height: Int,
     includeBase64: Bool,
-    suggestedName: String?
+    suggestedName: String?,
+    exif: ExifPayload?
   ) -> AssetPayload? {
     do {
       let url = try tempFiles.makeFileURL(fileExtension: format.fileExtension)
@@ -226,7 +250,8 @@ struct ImageProcessor {
         fileSize: data.count,
         width: width,
         height: height,
-        base64: includeBase64 ? data.base64EncodedString() : nil
+        base64: includeBase64 ? data.base64EncodedString() : nil,
+        exif: exif
       )
     } catch {
       NSLog("[ReactNativeMediaPicker] failed to write asset: %@", error.localizedDescription)

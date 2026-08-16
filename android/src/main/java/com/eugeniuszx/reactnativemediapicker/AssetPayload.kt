@@ -16,4 +16,5 @@ internal data class AssetPayload(
   val base64: String?,
   val durationSeconds: Double? = null,
   val thumbnail: Thumbnail? = null,
+  val exif: ExifPayload? = null,
 )

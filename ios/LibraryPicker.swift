@@ -37,7 +37,6 @@ final class LibraryPicker: NSObject, PHPickerViewControllerDelegate,
     case .mixed: configuration.filter = .any(of: [.images, .videos])
     }
     configuration.selectionLimit = options.selectionLimit
-    // Results follow the order the user tapped them in, not the order they sit in the library.
     configuration.selection = .ordered
     switch AssetRepresentationPlan.resolve(requested: options.format) {
     case .current: configuration.preferredAssetRepresentationMode = .current
@@ -57,8 +56,6 @@ final class LibraryPicker: NSObject, PHPickerViewControllerDelegate,
       }
       let picker = PHPickerViewController(configuration: configuration)
       picker.delegate = self
-      // The picker is a sheet, and swiping it away never reaches the picker delegate — without
-      // this the session would stay claimed forever and every later pick would be rejected.
       picker.presentationController?.delegate = self
       presenter.present(picker, animated: true)
     }
@@ -154,6 +151,8 @@ final class LibraryPicker: NSObject, PHPickerViewControllerDelegate,
               maxHeight: self.options.maxHeight,
               quality: self.options.quality,
               includeBase64: self.options.includeBase64,
+              stripMetadata: self.options.stripMetadata,
+              includeExif: self.options.includeExif,
               suggestedName: provider.suggestedName
             )
           else { return }

@@ -9,9 +9,15 @@ const pkg = require('./package.json');
 const DEFAULT_CAMERA_PERMISSION =
   '$(PRODUCT_NAME) needs access to your camera to take photos.';
 
+const DEFAULT_MICROPHONE_PERMISSION =
+  '$(PRODUCT_NAME) needs access to your microphone to record video.';
+
 const withMediaPicker = (config, props) => {
-  const { cameraPermission, enableAndroidCameraPermission = false } =
-    props ?? {};
+  const {
+    cameraPermission,
+    microphonePermission,
+    enableAndroidCameraPermission = false,
+  } = props ?? {};
 
   if (cameraPermission !== false) {
     config = withInfoPlist(config, (iosConfig) => {
@@ -19,6 +25,16 @@ const withMediaPicker = (config, props) => {
         cameraPermission ??
         iosConfig.modResults.NSCameraUsageDescription ??
         DEFAULT_CAMERA_PERMISSION;
+      return iosConfig;
+    });
+  }
+
+  if (microphonePermission !== false) {
+    config = withInfoPlist(config, (iosConfig) => {
+      iosConfig.modResults.NSMicrophoneUsageDescription =
+        microphonePermission ??
+        iosConfig.modResults.NSMicrophoneUsageDescription ??
+        DEFAULT_MICROPHONE_PERMISSION;
       return iosConfig;
     });
   }

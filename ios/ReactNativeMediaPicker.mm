@@ -48,6 +48,8 @@ static NSDictionary *RNMediaPickerBuildResponse(NSArray<NSDictionary<NSString *,
                                              mediaType:options.mediaType()
                                          includeBase64:options.includeBase64()
                                       includeThumbnail:options.includeThumbnail()
+                                           includeExif:options.includeExif()
+                                         stripMetadata:options.stripMetadata()
                                             completion:^(NSArray<NSDictionary<NSString *, id> *> *assets,
                                                          BOOL didCancel,
                                                          NSString *errorCode,
@@ -61,11 +63,17 @@ static NSDictionary *RNMediaPickerBuildResponse(NSArray<NSDictionary<NSString *,
               reject:(RCTPromiseRejectBlock)reject
 {
     [_coordinator launchCameraWithCameraType:options.cameraType()
+                                   mediaType:options.mediaType()
                                     maxWidth:(NSInteger)options.maxWidth()
                                    maxHeight:(NSInteger)options.maxHeight()
                                      quality:options.quality()
                                       format:options.format()
+                                 maxDuration:(NSInteger)options.maxDuration()
+                                videoQuality:options.videoQuality()
                                includeBase64:options.includeBase64()
+                            includeThumbnail:options.includeThumbnail()
+                                 includeExif:options.includeExif()
+                               stripMetadata:options.stripMetadata()
                                   completion:^(NSArray<NSDictionary<NSString *, id> *> *assets,
                                                BOOL didCancel,
                                                NSString *errorCode,

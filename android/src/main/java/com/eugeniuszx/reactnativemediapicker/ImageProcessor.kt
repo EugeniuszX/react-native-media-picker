@@ -22,11 +22,14 @@ internal class ImageProcessor(
     maxHeight: Int,
     quality: Int,
     includeBase64: Boolean,
+    stripMetadata: Boolean = false,
+    includeExif: Boolean = false,
     suggestedName: String? = null,
   ): AssetPayload {
     val srcMime = MediaFormat.normalizeMime(resolver.getType(uri))
     val bounds = readBounds(uri)
     val orientation = readOrientation(uri)
+    val exif = if (includeExif) ExifReader.read(resolver, uri) else null
     val isAnimated = srcMime == "image/gif" ||
       (srcMime == "image/webp" && isAnimatedWebp(uri))
 
@@ -40,11 +43,40 @@ internal class ImageProcessor(
       isAnimated = output.preserveAnimation,
     )
 
-    return if (plan.needsTransform || output.forceReencode) {
-      transform(uri, output.target, plan, orientation, quality, includeBase64, suggestedName)
-    } else {
-      passthrough(uri, srcMime, plan, includeBase64, suggestedName)
+    val willTransform = plan.needsTransform || output.forceReencode
+    val preserveSource = MetadataPlan.preservesSource(srcMime, output.preserveAnimation)
+    val action = MetadataPlan.resolve(
+      stripMetadata = stripMetadata,
+      willTransform = willTransform,
+      preserveSource = preserveSource,
+      canScrub = MetadataPlan.canScrub(srcMime),
+    )
+
+    if (willTransform || action == MetadataAction.FORCE_REENCODE) {
+      return transform(
+        uri, output.target, plan, orientation, quality, includeBase64, suggestedName, exif,
+      )
     }
+
+    if (action == MetadataAction.SCRUB) {
+      val outFile = copyToTemp(uri, srcMime)
+      val declined = MetadataResidue.isPresent(outFile)
+      if (!declined && MetadataScrubber.scrub(outFile)) {
+        return payloadFrom(outFile, srcMime, plan, includeBase64, suggestedName, exif)
+      }
+      if (!preserveSource) {
+        outFile.delete()
+        return transform(
+          uri, output.target, plan, orientation, quality, includeBase64, suggestedName, exif,
+        )
+      }
+      if (declined) {
+        return payloadFrom(outFile, srcMime, plan, includeBase64, suggestedName, exif)
+      }
+      outFile.delete()
+    }
+
+    return payloadFrom(copyToTemp(uri, srcMime), srcMime, plan, includeBase64, suggestedName, exif)
   }
 
   private fun readBounds(uri: Uri): Pair<Int, Int> {
@@ -84,26 +116,34 @@ internal class ImageProcessor(
     false
   }
 
-  private fun passthrough(
-    uri: Uri,
+  /** Copies the source bytes into a temp file untouched. */
+  private fun copyToTemp(uri: Uri, mime: String): File {
+    val outFile = tempFiles.createFile(MediaFormat.extensionForMime(mime))
+    resolver.openInputStream(uri).use { input ->
+      input ?: throw IllegalStateException("Failed to open image stream")
+      FileOutputStream(outFile).use { output -> input.copyTo(output) }
+    }
+    return outFile
+  }
+
+  /**
+   * Describes a file that was copied rather than re-encoded. The base64 is read back from the
+   * file so it reflects a scrub, rather than the bytes that went in.
+   */
+  private fun payloadFrom(
+    file: File,
     mime: String,
     plan: DecodePlan,
     includeBase64: Boolean,
     suggestedName: String?,
+    exif: ExifPayload?,
   ): AssetPayload {
-    val outFile = tempFiles.createFile(MediaFormat.extensionForMime(mime))
-    var base64: String? = null
-    resolver.openInputStream(uri).use { input ->
-      input ?: throw IllegalStateException("Failed to open image stream")
-      if (includeBase64) {
-        val bytes = input.readBytes()
-        outFile.writeBytes(bytes)
-        base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
-      } else {
-        FileOutputStream(outFile).use { output -> input.copyTo(output) }
-      }
+    val base64 = if (includeBase64) {
+      Base64.encodeToString(file.readBytes(), Base64.NO_WRAP)
+    } else {
+      null
     }
-    return payload(outFile, mime, plan.displayWidth, plan.displayHeight, base64, suggestedName)
+    return payload(file, mime, plan.displayWidth, plan.displayHeight, base64, suggestedName, exif)
   }
 
   private fun transform(
@@ -114,6 +154,7 @@ internal class ImageProcessor(
     quality: Int,
     includeBase64: Boolean,
     suggestedName: String?,
+    exif: ExifPayload?,
   ): AssetPayload {
     val decodeOptions = BitmapFactory.Options().apply { inSampleSize = plan.sampleSize }
     var bitmap = resolver.openInputStream(uri).use {
@@ -142,7 +183,7 @@ internal class ImageProcessor(
     } else {
       null
     }
-    return payload(outFile, outMime, width, height, base64, suggestedName)
+    return payload(outFile, outMime, width, height, base64, suggestedName, exif)
   }
 
   private fun applyOrientation(bitmap: Bitmap, orientation: ExifOrientation): Bitmap {
@@ -184,6 +225,7 @@ internal class ImageProcessor(
     height: Int,
     base64: String?,
     suggestedName: String?,
+    exif: ExifPayload?,
   ) = AssetPayload(
     uri = Uri.fromFile(file).toString(),
     mime = mime,
@@ -192,5 +234,6 @@ internal class ImageProcessor(
     width = width,
     height = height,
     base64 = base64,
+    exif = exif,
   )
 }
