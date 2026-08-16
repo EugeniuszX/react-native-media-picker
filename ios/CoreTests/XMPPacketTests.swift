@@ -23,6 +23,12 @@ final class XMPPacketTests: XCTestCase {
     XCTAssertTrue(XMPPacket.isPresent(in: buffer(embedding: "http://ns.adobe.com/xap/1.0/")))
   }
 
+  func testDetectsThePngKeywordOnItsOwn() {
+    // A compression-flagged `iTXt` chunk deflates its payload, so the keyword is all that is
+    // left in plain bytes — none of the other three markers is present here.
+    XCTAssertTrue(XMPPacket.isPresent(in: buffer(embedding: "iTXtXML:com.adobe.xmp")))
+  }
+
   func testAnEmptyBufferHasNoPacket() {
     XCTAssertFalse(XMPPacket.isPresent(in: Data()))
   }

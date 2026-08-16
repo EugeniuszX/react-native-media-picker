@@ -114,6 +114,12 @@ final class CameraPicker: NSObject, UIImagePickerControllerDelegate,
           uti: UTType.quickTimeMovie.identifier,
           includeThumbnail: options.includeThumbnail
         )
+        // The recording is written straight into `NSTemporaryDirectory()` by the system picker,
+        // one level outside `tmp/rn-media-picker` — so neither the 24-hour sweep nor
+        // `cleanTempFiles()` would ever reach it. `process` has already copied it into the store
+        // and the returned uri points at that copy, so the original is ours to drop, on the
+        // failure path as much as on the success one.
+        try? FileManager.default.removeItem(at: url)
         _ = dismissed.wait(timeout: .now() + Self.dismissalTimeout)
         guard let payload else {
           complete(nil, false, .others, "Failed to record video")
