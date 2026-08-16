@@ -292,8 +292,10 @@ knowing, because only one of them is free:
   this was measured: the scrubbed JPEG's quantisation tables are byte-identical
   to the source's and its entropy-coded scan is byte-identical too, so **not one
   pixel changes**. The file gets slightly smaller, by roughly the size of the
-  metadata that was removed. Auxiliary images stored beside the main one — an
-  HDR gain map, a depth map — are carried across intact.
+  metadata that was removed. An auxiliary image stored beside the main one is
+  carried across intact: this was measured on an HDR gain map, which comes back
+  bit-for-bit. A depth map rides the same copy and should survive with it, but
+  that was not measured.
 - **Re-encoding.** Used where the container cannot be rewritten. The image is
   decoded and written afresh, so `fileSize` changes, `type` and `fileName` can
   change with it, and the pixels are no longer the source's. It also writes one
@@ -308,10 +310,10 @@ means. The in-place rewrite keeps the EXIF orientation tag — dropping it would
 render a quarter-turned photo sideways, and the reported `width`/`height` already
 assume it is there. A source carrying no orientation tag comes back with an
 explicit `Orientation = 1`, which is what its absence already meant. The
-re-encode bakes the rotation into the pixels instead and
-writes a file with no EXIF at all, so there is no orientation tag left to read
-back; the image is simply upright. Either way `width`/`height` describe what you
-were handed.
+re-encode bakes the rotation into the pixels instead and writes a file whose
+EXIF holds only ImageIO's own basics — the orientation comes back as `1` — so
+the image is simply upright. Either way `width`/`height` describe what you were
+handed.
 
 | Source | iOS | Android |
 |---|---|---|
@@ -403,7 +405,7 @@ by-line title, city, country, headline, credit, caption, copyright — every
 dataset is gone from the output, while the quantisation tables, Huffman tables
 and entropy-coded scan come back byte-identical and 0 of 921 600 samples change.
 What survives is an empty
-`8BIM` `0x0404` resource: a 14-byte shell with a zero-length payload, carrying
+`8BIM` `0x0404` resource: a 12-byte shell with a zero-length payload, carrying
 nothing from the source. A PNG with text chunks is re-encoded on iOS too, for the
 reason given above.
 
