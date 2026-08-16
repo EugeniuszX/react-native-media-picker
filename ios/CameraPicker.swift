@@ -29,6 +29,18 @@ final class CameraPicker: NSObject, UIImagePickerControllerDelegate,
 
   func start() -> Bool {
     guard UIImagePickerController.isSourceTypeAvailable(.camera) else { return false }
+    // A camera source can exist while movie capture does not — the iOS simulator is exactly that
+    // case, and so are some managed configurations. `setMediaTypes:` raises
+    // `NSInvalidArgumentException` ("No available types for source 1") for a type the source does
+    // not offer, and an Objective-C exception cannot be caught from Swift: the process aborts.
+    // So the video branch is gated on the media type as well as on the source, and reports the
+    // same `camera_unavailable` the missing-camera path does.
+    if options.mediaType == .video,
+      UIImagePickerController.availableMediaTypes(for: .camera)?
+        .contains(UTType.movie.identifier) != true
+    {
+      return false
+    }
 
     selfReference = self
 
