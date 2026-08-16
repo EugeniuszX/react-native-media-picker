@@ -36,18 +36,27 @@ enum MetadataScrubber {
     // orientation-only object — and no merge flag — is what strips the rest. Merging is what an
     // earlier implementation did through a partial TIFF dictionary, and it left Make, Model,
     // Software, DateTime, Artist and Copyright in the file.
+    //
+    // The `?? 1` is load-bearing, not tidiness. Without it a source carrying no orientation tag —
+    // screenshots and exports routinely omit one — hands this call an *empty* metadata object,
+    // and if ImageIO read that as "no override" rather than "override with nothing" the six
+    // identifying tags would survive in silence: the failure above, on a different input. An
+    // empty object has since been measured stripping everything, so the default changes no
+    // outcome known today; it stays because this implementation exists precisely because a
+    // documented ImageIO guarantee turned out false on-device, and a branch that cannot happen
+    // needs no guarantee. EXIF defines an absent orientation as 1, so defaulting to it is a
+    // no-op for the image. Do not "simplify" this back to an `if let`.
     let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] ?? [:]
     let metadata = CGImageMetadataCreateMutable()
-    if let orientation = properties[kCGImagePropertyOrientation] {
-      guard
-        CGImageMetadataSetValueMatchingImageProperty(
-          metadata,
-          kCGImagePropertyTIFFDictionary,
-          kCGImagePropertyTIFFOrientation,
-          orientation as CFTypeRef
-        )
-      else { return nil }
-    }
+    let orientation = properties[kCGImagePropertyOrientation] ?? 1
+    guard
+      CGImageMetadataSetValueMatchingImageProperty(
+        metadata,
+        kCGImagePropertyTIFFDictionary,
+        kCGImagePropertyTIFFOrientation,
+        orientation as CFTypeRef
+      )
+    else { return nil }
 
     let options: [CFString: Any] = [
       kCGImageDestinationMetadata: metadata,
