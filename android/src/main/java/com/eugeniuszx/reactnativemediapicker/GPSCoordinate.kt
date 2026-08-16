@@ -16,7 +16,6 @@ internal object GPSCoordinate {
       magnitude += value / divisors[index]
     }
 
-    // `toDoubleOrNull` accepts `Infinity` and `NaN`; neither is a coordinate.
     if (!magnitude.isFinite()) return null
 
     val hemisphere = ref?.trim()?.uppercase()

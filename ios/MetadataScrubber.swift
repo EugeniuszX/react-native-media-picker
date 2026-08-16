@@ -8,18 +8,8 @@ enum MetadataScrubber {
   /// then re-encodes instead, because a half-stripped file is not an acceptable answer to
   /// `stripMetadata: true`.
   static func scrubbed(data: Data) -> Data? {
-    // The exclusion keys below reach only what ImageIO chooses to rewrite. XMP is a second
-    // representation that can carry `exif:GPSLatitude`, `tiff:Make` and `tiff:Model`, and a source
-    // already carrying a packet was measured to keep it — so such a source is declined outright
-    // and re-encoded by the caller instead. This gate reads raw bytes and depends on nothing
-    // ImageIO does, which is why it comes first.
     guard !XMPPacket.isPresent(in: data) else { return nil }
 
-    // JPEG only. `CGImageDestinationCopyImageSource` is the one ImageIO call documented to copy
-    // the image data unmodified, and it was measured to strip completely only for JPEG: on PNG it
-    // leaves every `tEXt` credit in place and *adds* an XMP packet rebuilt from them, and on HEIC
-    // it keeps Artist, Copyright, DateTime, Software, the IPTC by-line and the XMP. Those two go
-    // to the caller's re-encode, which was measured clean.
     guard let source = CGImageSourceCreateWithData(data as CFData, nil),
       let type = CGImageSourceGetType(source),
       UTType(type as String)?.conforms(to: .jpeg) == true
@@ -30,22 +20,6 @@ enum MetadataScrubber {
       return nil
     }
 
-    // The orientation must survive: dropping it would render a quarter-turned photo sideways, and
-    // the reported `width`/`height` assume it intact. `kCGImageDestinationMetadata` *replaces*
-    // every EXIF/IPTC/XMP tag unless `kCGImageDestinationMergeMetadata` is set, so an
-    // orientation-only object — and no merge flag — is what strips the rest. Merging is what an
-    // earlier implementation did through a partial TIFF dictionary, and it left Make, Model,
-    // Software, DateTime, Artist and Copyright in the file.
-    //
-    // The `?? 1` is load-bearing, not tidiness. Without it a source carrying no orientation tag —
-    // screenshots and exports routinely omit one — hands this call an *empty* metadata object,
-    // and if ImageIO read that as "no override" rather than "override with nothing" the six
-    // identifying tags would survive in silence: the failure above, on a different input. An
-    // empty object has since been measured stripping everything, so the default changes no
-    // outcome known today; it stays because this implementation exists precisely because a
-    // documented ImageIO guarantee turned out false on-device, and a branch that cannot happen
-    // needs no guarantee. EXIF defines an absent orientation as 1, so defaulting to it is a
-    // no-op for the image. Do not "simplify" this back to an `if let`.
     let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] ?? [:]
     let metadata = CGImageMetadataCreateMutable()
     let orientation = properties[kCGImagePropertyOrientation] ?? 1

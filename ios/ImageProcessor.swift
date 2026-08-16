@@ -53,8 +53,6 @@ struct ImageProcessor {
     )
 
     if !willTransform, action != .forceReencode {
-      // `.scrub` falls through to the transform path when ImageIO refuses the rewrite, so a
-      // strip request is never silently ignored.
       let payloadData = action == .scrub ? MetadataScrubber.scrubbed(data: data) : data
       if let payloadData {
         return write(

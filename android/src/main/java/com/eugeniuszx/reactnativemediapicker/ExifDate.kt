@@ -11,7 +11,6 @@ internal object ExifDate {
   fun iso8601(raw: String?): String? {
     val match = PATTERN.matchEntire(raw?.trim() ?: return null) ?: return null
     val (year, month, day, hour, minute, second) = match.destructured
-    // Cameras write an all-zero placeholder when the clock was never set.
     if (year == "0000") return null
     return "$year-$month-${day}T$hour:$minute:$second"
   }

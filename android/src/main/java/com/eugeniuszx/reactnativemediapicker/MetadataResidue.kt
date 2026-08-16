@@ -67,10 +67,6 @@ internal object MetadataResidue {
   private fun scan(stream: InputStream): Boolean {
     val signature = ByteArray(PNG_SIGNATURE.size)
     val read = readFully(stream, signature)
-    // A PNG is walked rather than scanned: its chunk types are four bytes, short enough to occur
-    // by chance inside compressed pixel data, so searching for them as text would decline
-    // perfectly clean files. Walking the chunk table is exact, and it subsumes the XMP markers
-    // above — an XMP packet in a PNG lives in an iTXt chunk either way.
     return if (read == signature.size && signature.contentEquals(PNG_SIGNATURE)) {
       pngCarriesTextChunk(stream)
     } else {
@@ -86,8 +82,6 @@ internal object MetadataResidue {
   private fun pngCarriesTextChunk(stream: InputStream): Boolean {
     val header = ByteArray(PNG_CHUNK_HEADER_LENGTH)
     while (readFully(stream, header) == PNG_CHUNK_HEADER_LENGTH) {
-      // A chunk length is a 4-byte big-endian value whose top bit is zero per the spec, so a
-      // negative Int here means the file is lying about its own structure.
       val dataLength = readInt32(header)
       if (dataLength < 0) return true
 
@@ -107,8 +101,6 @@ internal object MetadataResidue {
    */
   private fun containsMarker(stream: InputStream, prefix: ByteArray, prefixLength: Int): Boolean {
     val buffer = ByteArray(CHUNK + OVERLAP)
-    // Every marker is longer than the signature, so the prefix cannot hold one on its own; it is
-    // carried forward to be checked together with the first chunk.
     var carried = minOf(prefixLength, OVERLAP)
     System.arraycopy(prefix, 0, buffer, 0, carried)
 

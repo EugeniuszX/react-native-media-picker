@@ -20,15 +20,8 @@ internal object MetadataPlan {
     canScrub: Boolean,
   ): MetadataAction = when {
     !stripMetadata -> MetadataAction.SKIP
-    // A re-encode decodes to a bitmap and writes fresh bytes, so no metadata survives it.
     willTransform -> MetadataAction.SKIP
-    // Checked before `preserveSource`, because a scrub is a container rewrite and not a
-    // re-encode: no pixel is decoded, so an animated WebP keeps every frame while losing the
-    // EXIF chunk its camera wrote. Only the re-encode is destructive.
     canScrub -> MetadataAction.SCRUB
-    // Left with the choice between re-encoding and doing nothing, and this source cannot be
-    // re-encoded: an animated one would lose its frames, and a GIF would be flattened into a
-    // JPEG to remove metadata it never had.
     preserveSource -> MetadataAction.SKIP
     else -> MetadataAction.FORCE_REENCODE
   }

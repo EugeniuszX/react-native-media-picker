@@ -350,7 +350,6 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
     }
 
     if (options.mediaType == CameraMediaType.VIDEO) {
-      // Some camera apps ignore EXTRA_OUTPUT and hand back a content uri instead.
       val source = when {
         file != null && file.exists() && file.length() > 0L -> Uri.fromFile(file)
         data?.data != null -> data.data

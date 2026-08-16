@@ -60,33 +60,16 @@ internal class ImageProcessor(
 
     if (action == MetadataAction.SCRUB) {
       val outFile = copyToTemp(uri, srcMime)
-      // A source carrying metadata outside the EXIF segment is declined before the scrub is even
-      // attempted, because `saveAttributes` would copy that metadata across untouched: an XMP
-      // packet carries `exif:GPSLatitude` and `tiff:Model` of its own, a Photoshop APP13 block
-      // carries the IPTC creator and city, and PNG text chunks carry the credits. The re-encode
-      // below is the deliberate price of a guarantee that holds for every input rather than one
-      // that quietly leaks for files from an Adobe or Google Photos pipeline.
       val declined = MetadataResidue.isPresent(outFile)
       if (!declined && MetadataScrubber.scrub(outFile)) {
         return payloadFrom(outFile, srcMime, plan, includeBase64, suggestedName, exif)
       }
-      // The scrub did not happen, so a re-encode is the fallback that keeps the strip honest —
-      // unless this is a source we are not allowed to re-encode. The only route there is an
-      // animated WebP with residue: a re-encode would flatten it to a single frame, so the frames
-      // win and the file comes back as it arrived. iOS reaches the same outcome for an animated
-      // WebP, though by a different route: it cannot rewrite a WebP at all, so `canScrub` is
-      // false there and `preserveSource` skips it. (A *static* WebP does differ between the two:
-      // iOS re-encodes it, Android scrubs it in place.)
       if (!preserveSource) {
         outFile.delete()
         return transform(
           uri, output.target, plan, orientation, quality, includeBase64, suggestedName, exif,
         )
       }
-      // A declined scrub never opened the file for writing, so this copy is byte-identical to the
-      // source and is exactly what we return — no need to copy it again. A scrub that was
-      // attempted and failed may have left it half-written (`saveAttributes` restores from its
-      // own temp copy only on a best-effort basis), so that one is discarded and re-copied.
       if (declined) {
         return payloadFrom(outFile, srcMime, plan, includeBase64, suggestedName, exif)
       }

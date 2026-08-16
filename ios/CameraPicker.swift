@@ -29,12 +29,6 @@ final class CameraPicker: NSObject, UIImagePickerControllerDelegate,
 
   func start() -> Bool {
     guard UIImagePickerController.isSourceTypeAvailable(.camera) else { return false }
-    // A camera source can exist while movie capture does not — the iOS simulator is exactly that
-    // case, and so are some managed configurations. `setMediaTypes:` raises
-    // `NSInvalidArgumentException` ("No available types for source 1") for a type the source does
-    // not offer, and an Objective-C exception cannot be caught from Swift: the process aborts.
-    // So the video branch is gated on the media type as well as on the source, and reports the
-    // same `camera_unavailable` the missing-camera path does.
     if options.mediaType == .video,
       UIImagePickerController.availableMediaTypes(for: .camera)?
         .contains(UTType.movie.identifier) != true
@@ -80,7 +74,6 @@ final class CameraPicker: NSObject, UIImagePickerControllerDelegate,
       if options.mediaType == .video {
         picker.mediaTypes = [UTType.movie.identifier]
         picker.videoQuality = Self.quality(for: options.videoQuality)
-        // 0 means "leave the platform default", which on iOS is a 10-minute ceiling.
         if options.maxDuration > 0 {
           picker.videoMaximumDuration = TimeInterval(options.maxDuration)
         }
@@ -126,11 +119,6 @@ final class CameraPicker: NSObject, UIImagePickerControllerDelegate,
           uti: UTType.quickTimeMovie.identifier,
           includeThumbnail: options.includeThumbnail
         )
-        // The recording is written straight into `NSTemporaryDirectory()` by the system picker,
-        // one level outside `tmp/rn-media-picker` — so neither the 24-hour sweep nor
-        // `cleanTempFiles()` would ever reach it. `process` has already copied it into the store
-        // and the returned uri points at that copy, so the original is ours to drop, on the
-        // failure path as much as on the success one.
         try? FileManager.default.removeItem(at: url)
         _ = dismissed.wait(timeout: .now() + Self.dismissalTimeout)
         guard let payload else {
@@ -150,9 +138,6 @@ final class CameraPicker: NSObject, UIImagePickerControllerDelegate,
       return
     }
     DispatchQueue.global(qos: .userInitiated).async { [self] in
-      // `stripMetadata` is a no-op here: the capture is re-encoded from raw pixels, so the
-      // written file never carries EXIF in the first place. Reported EXIF comes from the
-      // picker's own metadata dictionary, not from the file.
       let exif =
         options.includeExif
         ? ExifReader.read(

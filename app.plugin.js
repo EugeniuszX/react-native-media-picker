@@ -29,8 +29,6 @@ const withMediaPicker = (config, props) => {
     });
   }
 
-  // Recording video with UIImagePickerController captures audio, so a missing
-  // NSMicrophoneUsageDescription crashes the app the moment the camera opens.
   if (microphonePermission !== false) {
     config = withInfoPlist(config, (iosConfig) => {
       iosConfig.modResults.NSMicrophoneUsageDescription =
