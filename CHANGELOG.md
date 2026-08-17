@@ -1,5 +1,7 @@
 # Changelog
 
+## [1.5.2](https://github-melber17/EugeniuszX/react-native-media-picker/compare/v1.5.1...v1.5.2) (2026-08-17)
+
 ## [1.5.1](https://github-melber17/EugeniuszX/react-native-media-picker/compare/v1.5.0...v1.5.1) (2026-08-17)
 
 
