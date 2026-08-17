@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1](https://github-melber17/EugeniuszX/react-native-media-picker/compare/v1.5.0...v1.5.1) (2026-08-17)
+
+
+### Bug Fixes
+
+* change media picker provider ([c21c61e](https://github-melber17/EugeniuszX/react-native-media-picker/commit/c21c61e53ef7f4ad1142788cb8180248fdb5b778))
+
 # [1.5.0](https://github-melber17/EugeniuszX/react-native-media-picker/compare/v1.4.0...v1.5.0) (2026-08-16)
 
 
