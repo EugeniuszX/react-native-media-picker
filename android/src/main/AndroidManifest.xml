@@ -9,7 +9,7 @@
   </queries>
   <application>
     <provider
-      android:name="androidx.core.content.FileProvider"
+      android:name="com.eugeniuszx.reactnativemediapicker.MediaPickerFileProvider"
       android:authorities="${applicationId}.rnmediapicker.fileprovider"
       android:exported="false"
       android:grantUriPermissions="true">
