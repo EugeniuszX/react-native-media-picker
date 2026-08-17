@@ -44,7 +44,7 @@ not ask for it. Two things can break a build, both in the type layer.
   double-tap case, which was probably the most common thing reaching it.
   TypeScript says nothing, because that comparison is still valid. Handle
   `'busy'` deliberately: see
-  [Response & error handling](../README.md#response--error-handling)
+  [Response & error handling](api.md#response--error-handling)
   for what it covers and, just as importantly, what it does not.
 
 New, all opt-in:

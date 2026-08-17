@@ -70,7 +70,7 @@ inside 512×512 (never scaled up), with the video's rotation metadata already
 applied. Its size is not configurable — `maxWidth`/`maxHeight`/`quality`/
 `format` describe the asset, not its preview. Photo assets never get one, and
 neither do camera photo captures — but a video recorded with
-[`launchCamera`](../README.md#camera) does, since it is a video asset like any
+[`launchCamera`](api.md#launchcameraoptions) does, since it is a video asset like any
 other.
 
 The thumbnail is a temp file in the same `rn-media-picker` directory, so it is
@@ -110,7 +110,7 @@ is passed through exactly as a picked one would be.
 The photo options do not apply to a recording and are ignored for it:
 `maxWidth`, `maxHeight`, `quality`, `format`, `includeBase64`, `includeExif` and
 `stripMetadata`. `videoQuality` and `maxDuration` take their place, with the
-caveats in the [`CameraOptions`](../README.md#cameraoptions) table —
+caveats in the [`CameraOptions`](api.md#cameraoptions) table —
 `cameraType` carries the same best-effort caveat on Android it always has.
 
 `maxDuration: 0` does not mean "record until the user stops". It means the

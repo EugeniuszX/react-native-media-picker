@@ -58,7 +58,7 @@ wrote, and — with no resize asked for and `format: 'original'` — that file i
 copied through **verbatim**, so whatever EXIF and GPS the camera app recorded is
 still inside the asset you get back. `stripMetadata: true` is what removes it,
 and for Android captures it does real work; that is the converse of the "no-op
-on iOS" note in the [`CameraOptions`](../README.md#cameraoptions) table.
+on iOS" note in the [`CameraOptions`](api.md#cameraoptions) table.
 
 ## `stripMetadata`
 
