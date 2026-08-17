@@ -32,7 +32,7 @@ With the default `format: 'original'` the source format is preserved:
   transparency must survive. File types the library does not recognize (for
   example AVIF) are currently treated as JPEG, so `format: 'jpeg'` returns them
   unchanged rather than transcoding them; the guarantee covers the formats
-  listed in the [`Asset`](../README.md#asset) section.
+  listed in the [`Asset`](api.md#asset) section.
 
 On iOS the system is willing to transcode a photo while exporting it from the
 library, so a HEIC can arrive already turned into JPEG. With `format: 'original'`

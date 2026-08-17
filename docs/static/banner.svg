@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-label="react-native-media-picker — pick photos and videos without gallery permissions">
+  <title>react-native-media-picker</title>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B1116"/>
+      <stop offset="0.55" stop-color="#101A22"/>
+      <stop offset="1" stop-color="#0C141A"/>
+    </linearGradient>
+
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#F0A93B" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#F0A93B" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="cardBack" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F0A93B"/>
+      <stop offset="1" stop-color="#D9812A"/>
+    </linearGradient>
+
+    <linearGradient id="cardFront" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#22313D"/>
+      <stop offset="1" stop-color="#18242D"/>
+    </linearGradient>
+
+    <pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse">
+      <circle cx="1.5" cy="1.5" r="1.5" fill="#7C8B99" fill-opacity="0.10"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="360" fill="url(#bg)"/>
+  <rect width="1200" height="360" fill="url(#dots)"/>
+  <ellipse cx="188" cy="176" rx="300" ry="240" fill="url(#glow)"/>
+
+  <!-- media cards mark -->
+  <g transform="translate(96 108)">
+    <rect x="6" y="8" width="112" height="112" rx="22" fill="url(#cardBack)" transform="rotate(-9 62 64)"/>
+    <rect x="22" y="24" width="112" height="112" rx="22" fill="url(#cardFront)" stroke="#3A4C5A" stroke-width="2"/>
+    <circle cx="52" cy="54" r="8" fill="#F0A93B"/>
+    <path d="M24 122 L60 84 L92 118 L110 100 L132 122 L132 114 A20 20 0 0 1 112 134 L44 134 A20 20 0 0 1 24 114 Z" fill="#3E5666"/>
+    <circle cx="120" cy="122" r="27" fill="#0B1116" fill-opacity="0.75"/>
+    <circle cx="120" cy="122" r="21" fill="#F0A93B"/>
+    <path d="M114 113 L131 122 L114 131 Z" fill="#101A22"/>
+  </g>
+
+  <!-- wordmark -->
+  <g font-family="ui-sans-serif, -apple-system, 'SF Pro Display', 'Helvetica Neue', Helvetica, Arial, sans-serif">
+    <text x="288" y="150" font-size="52" font-weight="700" fill="#F2F5F7" letter-spacing="-0.5">react-native-media-picker</text>
+    <text x="290" y="200" font-size="25" font-weight="400" fill="#9AA9B6">Pick photos and videos — without asking for gallery permissions.</text>
+
+    <g transform="translate(290 232)">
+      <rect x="0" y="0" width="212" height="38" rx="19" fill="#F0A93B" fill-opacity="0.12" stroke="#F0A93B" stroke-opacity="0.45"/>
+      <text x="20" y="25" font-size="17" font-weight="600" fill="#F0A93B" letter-spacing="0.4">New Architecture</text>
+
+      <rect x="228" y="0" width="92" height="38" rx="19" fill="#7C8B99" fill-opacity="0.10" stroke="#7C8B99" stroke-opacity="0.30"/>
+      <text x="248" y="25" font-size="17" font-weight="600" fill="#B4C1CC" letter-spacing="0.4">iOS</text>
+
+      <rect x="336" y="0" width="132" height="38" rx="19" fill="#7C8B99" fill-opacity="0.10" stroke="#7C8B99" stroke-opacity="0.30"/>
+      <text x="356" y="25" font-size="17" font-weight="600" fill="#B4C1CC" letter-spacing="0.4">Android</text>
+    </g>
+  </g>
+</svg>
