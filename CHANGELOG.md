@@ -5,9 +5,9 @@
 
 ### Bug Fixes
 
-* media library picker not opening on Android 10–12 devices with the Google Play photo picker backport
-* crash on multi-select below SDK extension R 2
-* fall back to the document picker and report a clear error when no app can pick media on android
+* media library picker not opening on Android 10–12 devices with the Google Play photo picker backport ([983815d](https://github-melber17/EugeniuszX/react-native-media-picker/commit/983815db2af4f9d52adbfd02620a417f9485b05a))
+* crash on multi-select below SDK extension R 2 ([983815d](https://github-melber17/EugeniuszX/react-native-media-picker/commit/983815db2af4f9d52adbfd02620a417f9485b05a))
+* fall back to the document picker and report a clear error when no app can pick media on android ([983815d](https://github-melber17/EugeniuszX/react-native-media-picker/commit/983815db2af4f9d52adbfd02620a417f9485b05a))
 
 ## [1.5.2](https://github-melber17/EugeniuszX/react-native-media-picker/compare/v1.5.1...v1.5.2) (2026-08-17)
 
