@@ -72,10 +72,18 @@ class ReactNativeMediaPickerModule(private val reactContext: ReactApplicationCon
     }
 
     try {
-      activity.startActivityForResult(
-        intents.mediaLibrary(parsed.selectionLimit, parsed.mediaType),
-        REQUEST_CODE,
-      )
+      val intent = intents.mediaLibrary(parsed.selectionLimit, parsed.mediaType)
+        .takeIf(intents::canBeHandled)
+        ?: intents.documentLibrary(parsed.selectionLimit, parsed.mediaType)
+          .takeIf(intents::canBeHandled)
+      if (intent == null) {
+        pending.take()
+        request.settle(
+          ResponseFactory.failure(PickerError.OTHERS, "No app available to pick media")
+        )
+        return
+      }
+      activity.startActivityForResult(intent, REQUEST_CODE)
     } catch (e: Throwable) {
       pending.take()
       request.settle(ResponseFactory.failure(PickerError.OTHERS, e.message ?: "launch error"))

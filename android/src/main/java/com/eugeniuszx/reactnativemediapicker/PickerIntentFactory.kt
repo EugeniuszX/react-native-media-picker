@@ -1,33 +1,52 @@
 package com.eugeniuszx.reactnativemediapicker
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.os.ext.SdkExtensions
 import android.provider.MediaStore
-import androidx.activity.result.contract.ActivityResultContracts
 
 internal class PickerIntentFactory(private val context: Context) {
   fun mediaLibrary(selectionLimit: Int, mediaType: RequestedMediaType): Intent =
-    if (ActivityResultContracts.PickVisualMedia.isPhotoPickerAvailable(context)) {
-      Intent(MediaStore.ACTION_PICK_IMAGES).apply {
-        LibraryIntentPlan.pickImagesMimeType(mediaType)?.let { type = it }
-        if (selectionLimit != 1) {
-          val systemMax = MediaStore.getPickImagesMaxLimit()
-          val max = if (selectionLimit == 0) systemMax else selectionLimit.coerceAtMost(systemMax)
-          putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, max)
-        }
-      }
+    when (val request = LibraryIntentPlan.request(libraryStrategy(), mediaType, selectionLimit)) {
+      is LibraryRequest.SystemPicker -> systemPicker(request)
+      is LibraryRequest.GetContent -> getContent(request)
+    }
+
+  fun documentLibrary(selectionLimit: Int, mediaType: RequestedMediaType): Intent =
+    getContent(LibraryIntentPlan.getContent(mediaType, selectionLimit))
+
+  private fun libraryStrategy(): LibraryStrategy {
+    val extensionR = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+      SdkExtensions.getExtensionVersion(Build.VERSION_CODES.R)
     } else {
-      val mimeTypes = LibraryIntentPlan.getContentMimeTypes(mediaType)
-      Intent(Intent.ACTION_GET_CONTENT).apply {
-        type = if (mimeTypes.size == 1) mimeTypes.first() else "*/*"
-        if (mimeTypes.size > 1) {
-          putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes.toTypedArray())
-        }
-        addCategory(Intent.CATEGORY_OPENABLE)
-        if (selectionLimit != 1) {
-          putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-        }
+      null
+    }
+    return LibraryIntentPlan.strategy(Build.VERSION.SDK_INT, extensionR)
+  }
+
+  @SuppressLint("NewApi")
+  private fun systemPicker(request: LibraryRequest.SystemPicker): Intent =
+    Intent(MediaStore.ACTION_PICK_IMAGES).apply {
+      request.mimeType?.let { type = it }
+      request.maxItems?.let { requested ->
+        val max = LibraryIntentPlan.pickImagesMax(requested, MediaStore.getPickImagesMaxLimit())
+        putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, max)
+      }
+    }
+
+  private fun getContent(request: LibraryRequest.GetContent): Intent =
+    Intent(Intent.ACTION_GET_CONTENT).apply {
+      val mimeTypes = request.mimeTypes
+      type = if (mimeTypes.size == 1) mimeTypes.first() else "*/*"
+      if (mimeTypes.size > 1) {
+        putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes.toTypedArray())
+      }
+      addCategory(Intent.CATEGORY_OPENABLE)
+      if (request.allowMultiple) {
+        putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
       }
     }
 
